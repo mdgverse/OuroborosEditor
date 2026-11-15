@@ -483,7 +483,7 @@ html, body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent}/* 1
 
 /* Versão do editor — o arquivo VERSION na raiz é a fonte da verdade
    (o build do APK usa o mesmo número no versionName e falha se divergir). */
-const APP_VERSION = '1.7.0';
+const APP_VERSION = '1.8.0';
 /* tooltip do botão da marca: só o nome do produto (a versão é metadado, não entra na marca) */
 {
   const marca = document.getElementById('brandBtn');
@@ -3326,9 +3326,22 @@ const NODE_TYPES = {
   },
   starGlow: {
     title: 'Star glow', cat: 'style', inputs: ['Image'],
+    kw: 'star burst glow streaks highlight anamorphic',
     params: [
-      NUM('threshold', 'Threshold', 0, 255, 205), NUM('size', 'Size', 8, 80, 22),
-      NUM('intensity', 'Intensity', 0, 100, 55),
+      SEC('sgComp', 'Compositing', 'How the glow is composited over the source.', true),
+      ENUM('sgBlend', 'Blend', [['normal', 'Normal'], ['screen', 'Screen'], ['lighten', 'Lighten'], ['overlay', 'Overlay'], ['multiply', 'Multiply']], 'normal'),
+      NUM('sgOpacity', 'Opacity', 0, 100, 100, 1),
+      SEC('sgDet', 'Highlight Detection', 'Which bright areas of the input generate streaks.', true),
+      NUM('threshold', 'Threshold', 0, 1, 0.35, 0.01), NUM('knee', 'Knee', 0, 1, 0, 0.01),
+      NUM('intensity', 'Intensity', 0, 5, 2.1, 0.01), NUM('highlightBoost', 'Highlight Boost', 0, 3, 0, 0.01),
+      SEC('sgStreaks', 'Streaks', 'Directional streak axes drawn from the highlights.', true),
+      NUM('streaks', 'Streaks', 1, 8, 3, 1), NUM('sampleCount', 'Sample Count', 1, 64, 30, 1),
+      NUM('length', 'Length', 1, 400, 115.5, 0.5), NUM('alternate', 'Alternate', 0, 1, 1, 0.01),
+      NUM('falloff', 'Falloff', 0.02, 1, 0.52, 0.01), NUM('angleDeg', 'Angle Deg', -180, 180, 0, 1),
+      SEC('sgColor', 'Color', 'Gradient applied to the streaks and how strongly.', true),
+      NUM('colorize', 'Colorize', 0, 1, 1, 0.01),
+      COL('gradFrom', 'Gradient Map · Start', '#FFFFFF'), COL('gradMid', 'Gradient Map · Middle', '#CFE4FF'), COL('gradTo', 'Gradient Map · End', '#8FB8FF'),
+      NUM('gradShift', 'Gradient Shift', 0, 1, 0.23, 0.01),
     ],
   },
   fadedCopy: {
@@ -3525,6 +3538,16 @@ const NODE_TYPES = {
       NUM('grooveShadow', 'Groove shadow', 0, 100, 32), ENUM('angle', 'Rib angle', [['90', 'Vertical (90°)'], ['0', 'Horizontal (0°)'], ['45', 'Diagonal (45°)'], ['-45', 'Diagonal (-45°)']], '90'),
       NUM('curvature', 'Lens curvature / profile', 0, 100, 65), NUM('glassGrain', 'Grain', 0, 60, 0),
       NUM('glassBlur', 'Blur / frost', 0, 20, 0),
+      // Prism with ridges (fluted) — painel da referência (1.8.0); os controles
+      // antigos acima continuam salvos e são migrados p/ estes em createNode.
+      ENUM('flBlend', 'Blend', [['normal', 'Normal'], ['multiply', 'Multiply'], ['screen', 'Screen'], ['overlay', 'Overlay']], 'normal'),
+      NUM('flAmount', 'Amount', 0, 3, 1.14, 0.01), NUM('flDispersion', 'Dispersion', 0, 1, 0.379, 0.001),
+      NUM('flReflection', 'Reflection', 0, 2, 1, 0.01), NUM('flReflScale', 'Reflection Scale', 0.1, 2, 0.95, 0.01),
+      ENUM('flPatternType', 'Pattern Type', [['1', 'Type 1 · Linear'], ['2', 'Type 2 · Wavy'], ['3', 'Type 3 · Honeycomb'], ['4', 'Type 4 · Crosshatch']], '1'),
+      NUM('flRepeats', 'Pattern Repeats', 1, 64, 19), NUM('flAngle', 'Pattern Angle', -180, 180, 0, 1),
+      NUM('flContrast', 'Pattern Contrast', 0, 8, 4, 0.01),
+      NUM('flShiftSpeed', 'Shift Speed', 0, 4, 1, 0.05), NUM('flShiftLoop', 'Shift Loop (sec)', 0.5, 30, 5, 0.1),
+      NUM('flImperfect', 'Imperfections', 0, 1, 0.3, 0.01), NUM('flImperfectScale', 'Imperfections Scale', 1, 40, 10, 0.5),
       // Vidro de pixel
       NUM('pixelCell', 'Cell size', 4, 80, 16), NUM('pixelScaleMix', 'Multi-scale mosaic', 0, 100, 60),
       NUM('pixelPatch', 'Mosaic region size', 10, 100, 46), NUM('pixelRefract', 'Refraction amount (pixel)', 0, 100, 55),
@@ -11682,29 +11705,127 @@ function fx7Sharp(srcCanvas, W, H, p) {
 }
 
 // Star Glow (fxStarGlow from v1.6)
+/* SG_PURO_INI */
+/* Star Glow 1.8.0: matemática pura — peso dos destaques (threshold/knee),
+   LUT do Gradient Map e normalização (incl. legado 0..255/0..100). */
+function sgHex(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || ''));
+  if (!m) return [255, 255, 255];
+  const n = parseInt(m[1], 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+function sgGradLut(p) {
+  const a = sgHex(p.gradFrom || '#FFFFFF'), b = sgHex(p.gradMid || '#CFE4FF'), c = sgHex(p.gradTo || '#8FB8FF');
+  const lut = new Uint8ClampedArray(256 * 3);
+  for (let i = 0; i < 256; i++) {
+    const t = i / 255, [de, para, k] = t < 0.5 ? [a, b, t * 2] : [b, c, (t - 0.5) * 2];
+    lut[i * 3] = de[0] + (para[0] - de[0]) * k;
+    lut[i * 3 + 1] = de[1] + (para[1] - de[1]) * k;
+    lut[i * 3 + 2] = de[2] + (para[2] - de[2]) * k;
+  }
+  return lut;
+}
+function sgPeso(lum, thr, knee) {
+  const k = Math.max(0, Number(knee || 0));
+  if (k <= 0.0001) return lum >= thr ? 1 : 0;   // knee 0: degrau limpo, sem divisão
+  const t = Math.min(1, Math.max(0, (lum - (thr - k)) / (2 * k)));
+  return t * t * (3 - 2 * t);
+}
+function sgNorm(p) {
+  p = p || {};
+  const num = (v, d) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
+  let thr = num(p.threshold, 0.35); if (thr > 1) thr /= 255;        // legado 0..255
+  let inten = num(p.intensity, 2.1); if (p.sgOpacity === undefined && inten > 5) inten /= 50;   // legado 0..100
+  return {
+    blend: p.sgBlend || 'normal',
+    opacity: Math.min(1, Math.max(0, num(p.sgOpacity, 100) / 100)),
+    thr: Math.min(1, Math.max(0, thr)),
+    knee: Math.min(1, Math.max(0, num(p.knee, 0))),
+    intensity: Math.max(0, inten),
+    boost: Math.max(0, num(p.highlightBoost, 0)),
+    streaks: Math.min(8, Math.max(1, Math.round(num(p.streaks, 3)))),
+    samples: Math.min(64, Math.max(1, Math.round(num(p.sampleCount, 30)))),
+    length: Math.max(0, num(p.length, p.size !== undefined ? num(p.size, 22) * 5 : 115.5)),
+    alternate: Math.min(1, Math.max(0, num(p.alternate, 1))),
+    falloff: Math.min(1, Math.max(0.02, num(p.falloff, 0.52))),
+    angDeg: num(p.angleDeg, 0),
+    colorize: Math.min(1, Math.max(0, num(p.colorize, 1))),
+    shift: Math.min(1, Math.max(0, num(p.gradShift, 0.23))),
+  };
+}
+/* SG_PURO_FIM */
+
 function fx7StarGlow(srcCanvas, W, H, p) {
+  const o = sgNorm(p);
   const cv = fx7NewCanvas(W, H);
-  const ctx = cv.getContext('2d', { willReadFrequently: true });
+  const ctx = cv.getContext('2d');
   ctx.drawImage(srcCanvas, 0, 0);
-  const src = srcCanvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, W, H).data;
-  const step = Math.max(10, Number(p.size ?? 22));
-  const threshold = Number(p.threshold ?? 205);
-  ctx.globalAlpha = Number(p.intensity ?? 55) / 100;
-  ctx.strokeStyle = 'rgba(255,255,255,.85)';
-  ctx.lineWidth = 1;
-  for (let y = step; y < H; y += step) {
-    for (let x = step; x < W; x += step) {
-      const i = fx7Idx(x, y, W, H);
-      if (fx5Luma255(src[i], src[i + 1], src[i + 2]) > threshold && src[i + 3] > 20) {
-        const r = step * 0.75;
-        ctx.beginPath();
-        ctx.moveTo(x - r, y); ctx.lineTo(x + r, y);
-        ctx.moveTo(x, y - r); ctx.lineTo(x, y + r);
-        ctx.stroke();
-      }
+  if (o.opacity <= 0.001 || o.intensity <= 0.001) return cv;   // Opacity 0: fonte intacta
+  /* O brilho é calculado em resolução de trabalho (<=640px, como um bloom):
+     streaks são suaves por natureza; o upscale final é o mesmo no preview
+     e na exportação, então os dois batem. */
+  const gs = Math.min(1, 640 / Math.max(W, H));
+  const gw = Math.max(8, Math.round(W * gs)), gh = Math.max(8, Math.round(H * gs));
+  const mini = fx7NewCanvas(gw, gh);
+  const mg = mini.getContext('2d', { willReadFrequently: true });
+  mg.drawImage(srcCanvas, 0, 0, gw, gh);
+  let dados;
+  try { dados = mg.getImageData(0, 0, gw, gh).data; } catch (_) { return cv; }
+  const lut = sgGradLut(p);
+  const camada = fx7NewCanvas(gw, gh);
+  const cg = camada.getContext('2d');
+  const im = cg.createImageData(gw, gh), id = im.data;
+  for (let px = 0, i = 0; px < gw * gh; px++, i += 4) {
+    const r = dados[i], g = dados[i + 1], b = dados[i + 2], a = dados[i + 3];
+    if (a < 8) continue;
+    const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+    let w = sgPeso(lum, o.thr, o.knee);
+    if (w <= 0) continue;
+    if (o.boost > 0) w *= 1 + o.boost * lum * lum;             // Highlight Boost: pesa mais os picos
+    const t = Math.min(1, Math.max(0, (lum - o.thr) / Math.max(0.0001, 1 - o.thr)));
+    let ts = (t + o.shift) % 1; if (ts < 0) ts += 1;           // Gradient Shift desloca o mapeamento
+    const li = Math.round(ts * 255) * 3;
+    const cz = o.colorize;
+    id[i] = Math.round(r * (1 - cz) + lut[li] * cz);
+    id[i + 1] = Math.round(g * (1 - cz) + lut[li + 1] * cz);
+    id[i + 2] = Math.round(b * (1 - cz) + lut[li + 2] * cz);
+    id[i + 3] = Math.min(255, Math.round(w * o.intensity * 140 * (a / 255)));
+  }
+  cg.putImageData(im, 0, 0);
+  /* Streaks: a camada de destaques é somada (lighter) deslocada ao longo de
+     cada eixo, nos dois sentidos, com decaimento pelo Falloff. Alternate
+     encurta/enfraquece os eixos ímpares (semântica definida aqui). */
+  const glow = fx7NewCanvas(gw, gh);
+  const gg = glow.getContext('2d');
+  gg.globalCompositeOperation = 'lighter';
+  gg.globalAlpha = 0.85;
+  gg.drawImage(camada, 0, 0);
+  const lenPx = o.length * gs;
+  const exp = 0.35 + o.falloff * 2.2;                          // falloff maior = decaimento mais rápido
+  for (let eixo = 0; eixo < o.streaks; eixo++) {
+    const ang = (o.angDeg + eixo * 180 / o.streaks) * Math.PI / 180;
+    const dx = Math.cos(ang), dy = Math.sin(ang);
+    const altF = eixo % 2 === 1 ? 1 - o.alternate * 0.55 : 1;  // Alternate: eixos ímpares a (1 - 0,55*alt)
+    const lenE = lenPx * altF;
+    if (lenE < 0.5) continue;
+    for (let s2 = 1; s2 <= o.samples; s2++) {
+      const t = s2 / o.samples;
+      const peso = Math.pow(1 - t, exp) * 0.5 * altF;
+      if (peso < 0.004) continue;
+      const ox = dx * t * lenE, oy = dy * t * lenE;
+      gg.globalAlpha = peso;
+      gg.drawImage(camada, ox, oy);
+      gg.drawImage(camada, -ox, -oy);
     }
   }
-  ctx.globalAlpha = 1;
+  gg.globalAlpha = 1;
+  const blendOp = { normal: 'source-over', screen: 'screen', lighten: 'lighten', overlay: 'overlay', multiply: 'multiply' }[o.blend] || 'source-over';
+  ctx.save();
+  ctx.globalCompositeOperation = blendOp;
+  ctx.globalAlpha = o.opacity;
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(glow, 0, 0, W, H);
+  ctx.restore();
   return cv;
 }
 
@@ -12880,7 +13001,7 @@ function fxBlobTrack(srcCanvas, W, H, p, runtime) {
 }
 
 /* fx13 */
-const FX13_GLASS_DEFAULTS = { glassMode: 'flutedPrism', flutedPattern: 'linear', ribWidth: 22, refractAmount: 38, prismDisplacement: 18, causticHighlight: 45, grooveShadow: 32, glassBlur: 0, glassGrain: 0, angle: 90, pixelCell: 16, pixelScaleMix: 60, pixelPatch: 46, pixelRefract: 55, pixelBevel: 70, pixelMagnify: 100, pixelFrost: 3, pixelHighlight: 65, pixelShadow: 45, pixelSparkle: 55, pixelGrain: 24, pixelChroma: 8, seed: 4, curvature: 65, glassScope: 'full', reflectionAmount: 60, reflectionAngle: 135, beamWidth: 85, mirrorOpacity: 35, mirrorFlip: 'diagonal', reflectionBlur: 6, reflectionTint: '#e8f4fc', causticGlare: 60, fresnelRim: 40, x: 50, y: 50, width: 54, height: 42, shape: 'rounded', frameType: 'rounded', radius: 28, roundness: 34, rotation: 0, skewX: 0, skewY: 0, direction: 'radial', orientation: 'radial', pattern: 'refractal', patternScale: 34, fracture: 52, facetSharpness: 64, causticSpectrum: 42, blur: 1.2, refraction: 46, refractionDistance: 14, thickness: 58, refractionCount: 3, magnify: 112, amount: 22, ribWidthLiquid: 6, bend: 60, aberration: 12, innerMagnify: 102, showGuide: 'yes', frost: 4, tint: 7, tintColor: '#eaffff', rim: 86, highlight: 48, shine: 74, shadow: 36, chroma: 12, feather: 4, mix: 100 };
+const FX13_GLASS_DEFAULTS = { flBlend: 'normal', flAmount: 1.14, flDispersion: 0.379, flReflection: 1, flReflScale: 0.95, flPatternType: '1', flRepeats: 19, flAngle: 0, flContrast: 4, flShiftSpeed: 1, flShiftLoop: 5, flImperfect: 0.3, flImperfectScale: 10, glassMode: 'flutedPrism', flutedPattern: 'linear', ribWidth: 22, refractAmount: 38, prismDisplacement: 18, causticHighlight: 45, grooveShadow: 32, glassBlur: 0, glassGrain: 0, angle: 90, pixelCell: 16, pixelScaleMix: 60, pixelPatch: 46, pixelRefract: 55, pixelBevel: 70, pixelMagnify: 100, pixelFrost: 3, pixelHighlight: 65, pixelShadow: 45, pixelSparkle: 55, pixelGrain: 24, pixelChroma: 8, seed: 4, curvature: 65, glassScope: 'full', reflectionAmount: 60, reflectionAngle: 135, beamWidth: 85, mirrorOpacity: 35, mirrorFlip: 'diagonal', reflectionBlur: 6, reflectionTint: '#e8f4fc', causticGlare: 60, fresnelRim: 40, x: 50, y: 50, width: 54, height: 42, shape: 'rounded', frameType: 'rounded', radius: 28, roundness: 34, rotation: 0, skewX: 0, skewY: 0, direction: 'radial', orientation: 'radial', pattern: 'refractal', patternScale: 34, fracture: 52, facetSharpness: 64, causticSpectrum: 42, blur: 1.2, refraction: 46, refractionDistance: 14, thickness: 58, refractionCount: 3, magnify: 112, amount: 22, ribWidthLiquid: 6, bend: 60, aberration: 12, innerMagnify: 102, showGuide: 'yes', frost: 4, tint: 7, tintColor: '#eaffff', rim: 86, highlight: 48, shine: 74, shadow: 36, chroma: 12, feather: 4, mix: 100 };
 // ===== v13: Glass Studio (fxGlassEffect of v1.6): geometry, refractive pattern, prism with streaks =====
 function fx13Rgb(hex) {
   const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || ''));
@@ -13261,117 +13382,155 @@ function fx13Refract(srcCanvas, W, H, p) {
 }
 
 // Prism with grooves / reeded (fxFlutedPrismGlass)
+/* FLUTED_PURO_INI */
+/* Prism with Ridges (Fluted) 1.8.0: matemática pura do perfil das estrias.
+   O perfil é avaliado UMA vez numa LUT de 256 entradas por render — o loop
+   de pixels antigo chamava Math.exp/Math.pow 2x por pixel. */
+function flutedFase(tempo, speed, loop) {
+  const l = Math.max(0.1, Number(loop ?? 5));
+  const ph = (Number(tempo || 0) * Number(speed || 0) / l) % 1;
+  return ph < 0 ? ph + 1 : ph;   // fase em [0,1): deslocar 1 período = costura invisível
+}
+function flutedPerfil(t, contrast, reflScale) {
+  const h = Math.sin(Math.PI * t);                       // altura do sulco cilíndrico (0..1)
+  const sr = Math.cos(Math.PI * t);                      // inclinação bruta da parede do sulco
+  const slope = Math.tanh(sr * (0.5 + Math.max(0, Number(contrast ?? 4)) * 0.5));
+  const hl = Math.pow(Math.max(0, h), 1.5 + 1.5 / Math.max(0.1, Number(reflScale ?? 0.95))) * (0.35 + 0.65 * Math.max(0, sr));
+  const groove = Math.pow(1 - h, 2) * Math.min(1, Math.max(0, Number(contrast ?? 4)) / 4) * 0.55;
+  return [slope, hl, groove];   // [inclinação -1..1, brilho de crista 0..1, sombra de vale 0..0.55]
+}
+function flutedNorm(p) {
+  p = p || {};
+  const tipoLeg = { linear: '1', wavy: '2', honeycomb: '3', crosshatch: '4' };
+  const num = (v, d) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
+  return {
+    amount: p.flAmount !== undefined ? num(p.flAmount, 1.14) : num(p.refractAmount, 38) * 0.03,
+    disp: p.flDispersion !== undefined ? num(p.flDispersion, 0.379) : num(p.prismDisplacement, 18) * 0.0211,
+    refl: p.flReflection !== undefined ? num(p.flReflection, 1) : num(p.causticHighlight, 45) / 45,
+    reflScale: p.flReflScale !== undefined ? num(p.flReflScale, 0.95) : 0.95,
+    tipo: p.flPatternType || tipoLeg[p.flutedPattern] || '1',
+    repeats: Math.min(64, Math.max(1, num(p.flRepeats, 19))),
+    angDeg: p.flAngle !== undefined ? num(p.flAngle, 0) : num(p.angle, 90) - 90,
+    contrast: p.flContrast !== undefined ? num(p.flContrast, 4) : 4,
+    imp: p.flImperfect !== undefined ? num(p.flImperfect, 0.3) : 0,
+    impScale: Math.max(1, num(p.flImperfectScale, 10)),
+    speed: num(p.flShiftSpeed, 0), loop: Math.max(0.1, num(p.flShiftLoop, 5)),
+  };
+}
+/* FLUTED_PURO_FIM */
+
 function fx13Fluted(srcCanvas, W, H, p) {
-  const pattern = p.flutedPattern || 'linear';
-  const rw = Math.max(3, Number(p.ribWidth || 22));
-  const refractAmount = Number(p.refractAmount ?? 38) / 100;
-  const prism = Number(p.prismDisplacement ?? 18) / 100;
-  const caustic = Number(p.causticHighlight ?? 45) / 100 * 255;
-  const shadow = Number(p.grooveShadow ?? 32) / 100;
-  const blur = Math.max(0, Number(p.glassBlur ?? 0));
-  const angleRad = Number(p.angle ?? 90) * Math.PI / 180;
-  const cosA = Math.cos(angleRad), sinA = Math.sin(angleRad);
-  const perpX = -sinA, perpY = cosA;
-  const curvature = clamp01(Number(p.curvature ?? 65) / 100);
-  const scope = p.glassScope || 'full';
+  const o = flutedNorm(p);
   const mix = clamp01(Number(p.mix ?? 100) / 100);
-  const grain = Math.max(0, Number(p.glassGrain ?? 0)) / 100;
-  const seedG = Number(p.seed || 0);
-  const c255 = v => clamp(v, 0, 255);
+  const cv = fx7NewCanvas(W, H);
+  const ctx = cv.getContext('2d', { willReadFrequently: true });
+  if (mix <= 0.001) { ctx.drawImage(srcCanvas, 0, 0); return cv; }   // Opacity 0: fonte intacta, sem loop
   const orig = srcCanvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, W, H).data;
   let src = orig;
+  const blur = Math.max(0, Number(p.glassBlur ?? 0));
   if (blur > 0.05) {
     const bc = fx7NewCanvas(W, H);
-    const g = bc.getContext('2d', { willReadFrequently: true });
-    g.filter = `blur(${Math.min(24, blur)}px)`;
-    g.drawImage(srcCanvas, 0, 0);
-    g.filter = 'none';
-    src = g.getImageData(0, 0, W, H).data;
+    const bg2 = bc.getContext('2d', { willReadFrequently: true });
+    bg2.filter = `blur(${Math.min(24, blur)}px)`;
+    bg2.drawImage(srcCanvas, 0, 0);
+    bg2.filter = 'none';
+    src = bg2.getImageData(0, 0, W, H).data;
   }
-  const cv = fx7NewCanvas(W, H);
-  const ctx = cv.getContext('2d');
   const out = ctx.createImageData(W, H), od = out.data;
+  const c255 = v => v < 0 ? 0 : v > 255 ? 255 : v;
+  const period = Math.max(3, Math.min(W, H) / o.repeats);
+  const ang = o.angDeg * Math.PI / 180, nx = Math.cos(ang), ny = Math.sin(ang);
+  const tempo = (typeof performance !== 'undefined' ? performance.now() : 0) / 1000;
+  const shiftPx = flutedFase(tempo, o.speed, o.loop) * period;
+  /* LUT do perfil (256 entradas, calculada 1x por render) */
+  const LUTN = 256, lutS = new Float32Array(LUTN), lutH = new Float32Array(LUTN), lutG = new Float32Array(LUTN);
+  for (let i = 0; i < LUTN; i++) { const pr = flutedPerfil(i / LUTN, o.contrast, o.reflScale); lutS[i] = pr[0]; lutH[i] = pr[1]; lutG[i] = pr[2]; }
+  /* Imperfections: grade de ruído estável (hash por célula), amostrada
+     bilinear — o mesmo ruído em todo quadro, sem cintilação. */
+  let ruido = null, celula = 1, gw = 0;
+  if (o.imp > 0.003) {
+    celula = Math.max(2, o.impScale);
+    gw = Math.ceil(W / celula) + 2;
+    const gh2 = Math.ceil(H / celula) + 2;
+    ruido = new Float32Array(gw * gh2);
+    for (let j = 0; j < gh2; j++) for (let i = 0; i < gw; i++) ruido[j * gw + i] = fx6Hash(i - 7, j + 3);
+  }
+  const ruidoEm = (x, y) => {
+    const gx = x / celula, gy = y / celula;
+    const x0 = Math.floor(gx), y0 = Math.floor(gy);
+    const fx = gx - x0, fy = gy - y0, sx2 = fx * fx * (3 - 2 * fx), sy2 = fy * fy * (3 - 2 * fy);
+    const i00 = y0 * gw + x0, i10 = i00 + 1, i01 = i00 + gw, i11 = i01 + 1;
+    const a = ruido[i00] + (ruido[i10] - ruido[i00]) * sx2;
+    const b = ruido[i01] + (ruido[i11] - ruido[i01]) * sx2;
+    return a + (b - a) * sy2;
+  };
+  const scope = p.glassScope || 'full';
   let rect = null, shape = null;
   if (scope === 'frame') { rect = fx13Rect(p, W, H); shape = fx13Shape(p); }
-  const isHex = pattern === 'honeycomb';
-  const isWavy = pattern === 'wavy';
-  const isGrid = pattern === 'crosshatch';
-  const hexH = rw * 0.8660254;
+  const grain = Math.max(0, Number(p.glassGrain ?? 0)) / 100;
+  const seedG = Number(p.seed || 0);
+  const blend = p.flBlend || 'normal';
+  const isHex = o.tipo === '3', isGrid = o.tipo === '4', isWavy = o.tipo === '2';
+  const hexH = period * 0.8660254;
+  const mistura = (origV, fxV) => {
+    if (blend === 'multiply') return origV * fxV / 255;
+    if (blend === 'screen') return 255 - (255 - origV) * (255 - fxV) / 255;
+    if (blend === 'overlay') return origV < 128 ? 2 * origV * fxV / 255 : 255 - 2 * (255 - origV) * (255 - fxV) / 255;
+    return fxV;
+  };
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
       const oi = (y * W + x) * 4;
       let frameStrength = 1;
       if (scope === 'frame' && rect) {
         frameStrength = fx13Strength(x + 0.5, y + 0.5, rect, 4, shape);
-        if (frameStrength <= 0.001) {
-          od[oi] = orig[oi]; od[oi + 1] = orig[oi + 1]; od[oi + 2] = orig[oi + 2]; od[oi + 3] = orig[oi + 3];
-          continue;
-        }
+        if (frameStrength <= 0.001) { od[oi] = orig[oi]; od[oi + 1] = orig[oi + 1]; od[oi + 2] = orig[oi + 2]; od[oi + 3] = orig[oi + 3]; continue; }
       }
-      let dirX = perpX, dirY = perpY;
-      let slope = 0, highlight = 0, groove = 1;
+      let dirX = nx, dirY = ny, slope = 0, highlight = 0, grooveMul = 1;
       if (isHex) {
-        const q = (0.6666667 * x) / rw;
-        const r = (-0.3333333 * x + 0.5773503 * y) / rw;
-        let rx = Math.round(q);
-        let ry = Math.round(-q - r);
-        let rz = Math.round(r);
+        const q = (0.6666667 * x) / period, r = (-0.3333333 * x + 0.5773503 * y) / period;
+        let rx = Math.round(q), ry = Math.round(-q - r), rz = Math.round(r);
         const xd = Math.abs(rx - q), yd = Math.abs(ry - (-q - r)), zd = Math.abs(rz - r);
-        if (xd > yd && xd > zd) rx = -ry - rz;
-        else if (yd > zd) ry = -rx - rz;
-        else rz = -rx - ry;
-        const hcx = rw * (1.5 * rx);
-        const hcy = rw * (0.8660254 * rx + 1.7320508 * rz);
-        const lx = x - hcx, ly = y - hcy;
-        const ax = Math.abs(lx), ay = Math.abs(ly);
-        const hexDist = Math.max(ax, ax * 0.5 + ay * 0.8660254) / (rw * 0.8660254);
-        const normDist = Math.min(1.2, hexDist);
+        if (xd > yd && xd > zd) rx = -ry - rz; else if (yd > zd) ry = -rx - rz; else rz = -rx - ry;
+        const lx = x - period * (1.5 * rx), ly = y - period * (0.8660254 * rx + 1.7320508 * rz);
+        const hexDist = Math.min(1.2, Math.max(Math.abs(lx), Math.abs(lx) * 0.5 + Math.abs(ly) * 0.8660254) / hexH);
         const a = Math.atan2(ly, lx);
-        const sector = Math.floor((a + Math.PI + 0.5235988) / 1.0471976) % 6;
-        const facetAngle = sector * 1.0471976 - Math.PI;
-        dirX = Math.cos(facetAngle);
-        dirY = Math.sin(facetAngle);
-        const curveExp = 1 - Math.sqrt(Math.max(0, 1 - Math.min(1, normDist * normDist) * curvature));
-        slope = curveExp * 1.6;
-        highlight = Math.exp(-Math.pow((normDist - 0.88) * 6.5, 2)) * caustic;
-        groove = 1 - Math.exp(-Math.pow((normDist - 1.0) * 5.0, 2)) * shadow;
+        const facetAngle = (Math.floor((a + Math.PI + 0.5235988) / 1.0471976) % 6) * 1.0471976 - Math.PI;
+        dirX = Math.cos(facetAngle); dirY = Math.sin(facetAngle);
+        slope = (1 - Math.sqrt(Math.max(0, 1 - Math.min(1, hexDist * hexDist)))) * 1.6;
+        highlight = Math.exp(-Math.pow((hexDist - 0.88) * 6.5, 2)) * o.refl * 180;
+        grooveMul = 1 - Math.exp(-Math.pow((hexDist - 1.0) * 5.0, 2)) * Math.min(1, o.contrast / 4) * 0.5;
       } else if (isGrid) {
-        const tx = ((x % rw) + rw) % rw;
-        const ty = ((y % rw) + rw) % rw;
-        const xix = (tx / rw - 0.5) * 2;
-        const xiy = (ty / rw - 0.5) * 2;
-        const slopeX = Math.sign(xix) * (1 - Math.sqrt(Math.max(0, 1 - Math.min(1, xix * xix) * curvature)));
-        const slopeY = Math.sign(xiy) * (1 - Math.sqrt(Math.max(0, 1 - Math.min(1, xiy * xiy) * curvature)));
+        const tx = ((x % period) + period) % period, ty = ((y % period) + period) % period;
+        const xix = (tx / period - 0.5) * 2, xiy = (ty / period - 0.5) * 2;
+        const slopeX = Math.sign(xix) * (1 - Math.sqrt(Math.max(0, 1 - Math.min(1, xix * xix))));
+        const slopeY = Math.sign(xiy) * (1 - Math.sqrt(Math.max(0, 1 - Math.min(1, xiy * xiy))));
         slope = Math.hypot(slopeX, slopeY);
-        dirX = slope > 0.001 ? slopeX / slope : 0;
-        dirY = slope > 0.001 ? slopeY / slope : 0;
-        highlight = Math.exp(-Math.pow(Math.max(Math.abs(xix), Math.abs(xiy)) - 0.2, 2) * 16) * caustic;
-        groove = 1 - Math.exp(-Math.pow(Math.max(Math.abs(xix), Math.abs(xiy)) - 0.95, 2) * 16) * shadow;
+        dirX = slope > 0.001 ? slopeX / slope : 0; dirY = slope > 0.001 ? slopeY / slope : 0;
+        highlight = Math.exp(-Math.pow(Math.max(Math.abs(xix), Math.abs(xiy)) - 0.2, 2) * 16) * o.refl * 180;
+        grooveMul = 1 - Math.exp(-Math.pow(Math.max(Math.abs(xix), Math.abs(xiy)) - 0.95, 2) * 16) * Math.min(1, o.contrast / 4) * 0.5;
       } else {
-        let waveOffset = 0;
-        if (isWavy) waveOffset = Math.sin((x * perpX + y * perpY) / 25) * (rw * 0.35);
-        const coord = x * cosA + y * sinA + waveOffset;
-        const t = ((coord % rw) + rw) % rw;
-        const norm = t / rw;
-        const xi = (norm - 0.5) * 2;
-        const curveExp = 1 - Math.sqrt(Math.max(0, 1 - Math.min(1, xi * xi) * curvature));
-        slope = Math.sign(xi) * curveExp;
-        highlight = Math.exp(-Math.pow((xi - 0.18) * 4.2, 2)) * caustic;
-        groove = 1 - Math.exp(-Math.pow((Math.abs(xi) - 0.96) * 3.5, 2)) * shadow;
+        let u = x * nx + y * ny;
+        if (isWavy) u += Math.sin((-x * ny + y * nx) * (6.2831853 / (period * 6))) * period * 0.35;
+        if (ruido) u += (ruidoEm(x, y) - 0.5) * o.imp * period * 0.7;
+        u += shiftPx;
+        let ph = (u / period) % 1; if (ph < 0) ph += 1;
+        const li = (ph * LUTN) | 0;
+        slope = lutS[li]; highlight = lutH[li] * o.refl * 255; grooveMul = 1 - lutG[li];
       }
-      const disp = slope * refractAmount * rw;
-      const rD = disp * (1 + prism * 1.6), gD = disp, bD = disp * (1 - prism * 1.6);
-      let fr = fx13SampleLin(src, x + dirX * rD, y + dirY * rD, 0, W, H) * groove + highlight;
-      let fg = fx13SampleLin(src, x + dirX * gD, y + dirY * gD, 1, W, H) * groove + highlight;
-      let fb = fx13SampleLin(src, x + dirX * bD, y + dirY * bD, 2, W, H) * groove + highlight * 1.25;
+      const disp = slope * o.amount * period * 0.45;
+      const rD = disp * (1 + o.disp * 0.85), gD = disp, bD = disp * (1 - o.disp * 0.85);
+      let fr = fx13SampleLin(src, x + dirX * rD, y + dirY * rD, 0, W, H) * grooveMul + highlight;
+      let fg = fx13SampleLin(src, x + dirX * gD, y + dirY * gD, 1, W, H) * grooveMul + highlight;
+      let fb = fx13SampleLin(src, x + dirX * bD, y + dirY * bD, 2, W, H) * grooveMul + highlight * 1.25;
       if (grain > 0.001) {
         const gn = (fx6Hash(x + seedG * 53, y - seedG * 59) - 0.5) * grain * 58;
         fr += gn; fg += gn; fb += gn;
       }
       const m = frameStrength * mix;
-      od[oi] = c255(orig[oi] + (fr - orig[oi]) * m);
-      od[oi + 1] = c255(orig[oi + 1] + (fg - orig[oi + 1]) * m);
-      od[oi + 2] = c255(orig[oi + 2] + (fb - orig[oi + 2]) * m);
+      od[oi] = c255(orig[oi] + (mistura(orig[oi], fr) - orig[oi]) * m);
+      od[oi + 1] = c255(orig[oi + 1] + (mistura(orig[oi + 1], fg) - orig[oi + 1]) * m);
+      od[oi + 2] = c255(orig[oi + 2] + (mistura(orig[oi + 2], fb) - orig[oi + 2]) * m);
       od[oi + 3] = orig[oi + 3];
     }
   }
@@ -25643,12 +25802,12 @@ const RUN = {
   tron: (n, [a]) => (a ? fx7Canvas(a, (s, W, H) => fx10Tron(s, W, H, n.params)) : null),
   highlightStarburst: (n, [a]) => (a ? fx7Canvas(a, (s, W, H) => fx11Starburst(s, W, H, n.params)) : null),
   crtScreen: (n, [a, b]) => (a ? fx7Canvas(a, (s, W, H) => fx12CRT(s, W, H, n.params, n.runtime, b ? crtModuleMask(n, b, W, H, a) : null)) : null),
-  glassStudio: (n, [a, b]) => fxStudioRun(a, (s, W, H, pp) => {
+  glassStudio: (n, [a, b]) => { if ((n.params.glassMode || 'flutedPrism') === 'flutedPrism' && Number(n.params.flShiftSpeed || 0) > 0) flutedAnimKick(); return fxStudioRun(a, (s, W, H, pp) => {
     // Texture linked on Refraction: the texture replaces the built-in direction/pattern map
     const driven = !!b && (pp.glassMode || 'flutedPrism') === 'refractal';
     const g = fx13Glass(s, W, H, driven ? { ...pp, texDriven: true } : pp);
     return b ? fx16GlassTex(g, W, H, pp, fx7SrcCanvas(b)) : g;
-  }, n.params, GLASS_PX),
+  }, n.params, GLASS_PX); },
   blurStudio: (n, [a]) => (n.params.blurMode === 'focusFrame' ? fbRun(n, a) : fxStudioRun(a, fx14BlurStudio, n.params, BLUR_PX)),
   mirrorEffect: (n, [a]) => (a ? fx7Canvas(a, (s, W, H) => fx15Mirror(s, W, H, { ...FX15_DEFAULTS, ...n.params })) : null),
   kaleidoscopeEffect: (n, [a]) => (a ? fx7Canvas(a, (s, W, H) => fx15Kaleidoscope(s, W, H, { ...FX15_DEFAULTS, ...n.params })) : null),
@@ -25836,6 +25995,19 @@ function createNode(type, x, y, opts = {}) {
   if (type === 'fractureEffect' && opts.params && !('fractureEngine' in opts.params)) n.params.fractureEngine = 'classic';
   if (type === 'crtScreen' && (!n.params.crtOff || typeof n.params.crtOff !== 'object' || Array.isArray(n.params.crtOff))) n.params.crtOff = {};   // sem flags (projeto antigo) = todos os parâmetros ligados
   if ((type === 'pixelSort' || type === 'sortedEffect') && opts.params) psMigrarLegado(n.params, opts.params);   // 1.7.0: mode/threshold antigos viram Span Mode + faixa
+  if (type === 'glassStudio' && opts.params && !('flAmount' in opts.params)) {   // 1.8.0: Fluted antigo -> controles da referência
+    n.params.flAmount = (Number(opts.params.refractAmount ?? 38) || 0) * 0.03;
+    n.params.flDispersion = (Number(opts.params.prismDisplacement ?? 18) || 0) * 0.0211;
+    n.params.flReflection = (Number(opts.params.causticHighlight ?? 45) || 0) / 45;
+    n.params.flPatternType = ({ linear: '1', wavy: '2', honeycomb: '3', crosshatch: '4' })[opts.params.flutedPattern || 'linear'] || '1';
+    n.params.flAngle = (Number(opts.params.angle ?? 90) || 0) - 90;
+    n.params.flShiftSpeed = 0;   // projeto antigo era estático: continua estático
+  }
+  if (type === 'starGlow' && opts.params && !('streaks' in opts.params)) {   // 1.8.0: threshold 0..255 / intensity 0..100 / size -> escala nova
+    n.params.threshold = Math.min(1, Math.max(0, (Number(opts.params.threshold ?? 205) || 0) / 255));
+    n.params.intensity = (Number(opts.params.intensity ?? 55) || 0) / 50;
+    n.params.length = (Number(opts.params.size ?? 22) || 22) * 5;
+  }
   if (type === 'blobTracker' && opts.params) blobMigrarLegado(n.params, opts.params);   // 1.7.0: textSize/placement/centerMark antigos migram; visual antigo preservado
   if (type === 'transform' && opts.params && !('unit' in opts.params)) n.params.unit = 'pct';   // old project: X/Y were in %
   if (type === 'fill' && opts.params && !('gX1' in opts.params)) fillMigraLegado(n);   // old Fill: centred line from the angle
@@ -25999,7 +26171,7 @@ function fxPodeSolto(n, def) {
    (n.cacheFast) so that the export never reuses a preview. */
 let FX_FAST = false;
 const FX_FAST_MAX = 720;
-const GLASS_PX = ['ribWidth', 'glassBlur', 'pixelCell', 'pixelFrost', 'beamWidth', 'reflectionBlur', 'patternScale', 'refractionDistance', 'chroma', 'amount', 'ribWidthLiquid', 'aberration', 'ribWidthOnly', 'ribAmount', 'ribSecondaryAmount', 'ribPrism'];
+const GLASS_PX = ['flImperfectScale', 'ribWidth', 'glassBlur', 'pixelCell', 'pixelFrost', 'beamWidth', 'reflectionBlur', 'patternScale', 'refractionDistance', 'chroma', 'amount', 'ribWidthLiquid', 'aberration', 'ribWidthOnly', 'ribAmount', 'ribSecondaryAmount', 'ribPrism'];
 const BLUR_PX = ['radius', 'textureAmount', 'motionAmount', 'maxBlur', 'dofBlur', 'focusBlur'];
 function fxStudioRun(a, fn, params, pxKeys) {
   if (!a) return null;
@@ -26196,6 +26368,22 @@ function requestRender() {
   renderQueued = true;
   requestAnimationFrame(() => { renderQueued = false; lastRenderAt = performance.now(); updateTransformInfo(); renderPreview(); lastRenderMs = performance.now() - lastRenderAt; });
 }
+/* 1.8.0: animação do Shift (Fluted). O laço só existe enquanto houver um
+   Glass Studio em modo Fluted com Shift Speed > 0 e a página visível —
+   sem isso, nada re-renderiza (o grafo já é cacheado por dirty). */
+let flutedAnimTimer = 0;
+function flutedAnimTick() {
+  flutedAnimTimer = 0;
+  if (document.hidden) return;
+  let algum = false;
+  for (const n of nodes.values()) {
+    if (n.type === 'glassStudio' && (n.params.glassMode || 'flutedPrism') === 'flutedPrism' && Number(n.params.flShiftSpeed || 0) > 0) { markDirty(n.id); algum = true; }
+  }
+  if (algum) { requestRender(); flutedAnimTimer = setTimeout(flutedAnimTick, 33); }
+}
+function flutedAnimKick() { if (!flutedAnimTimer && !document.hidden) flutedAnimTimer = setTimeout(flutedAnimTick, 33); }
+if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => { if (!document.hidden) flutedAnimKick(); });
+
 // "Input image: W × H px" line and px measurements of the Transform nodes: measures the input even outside the Output path
 function updateTransformInfo() {
   for (const n of nodes.values()) {
@@ -28291,7 +28479,7 @@ function stackItemEl(n, it, idx, render) {
 /* 2.9.37: Glass Studio — only the parameters of the chosen glass type. */
 const GLASS_JANELA = ['shape', 'x', 'y', 'width', 'height', 'roundness', 'rotation', 'skewX', 'skewY'];
 const GLASS_MODOS = {
-  flutedPrism: { mix: 1, seed: 1, keys: ['flutedPattern', 'ribWidth', 'refractAmount', 'prismDisplacement', 'causticHighlight', 'grooveShadow', 'angle', 'curvature', 'glassGrain', 'glassBlur'] },
+  flutedPrism: { mix: 1, seed: 1, keys: ['flBlend', 'flAmount', 'flDispersion', 'flReflection', 'flReflScale', 'flPatternType', 'flRepeats', 'flAngle', 'flContrast', 'flShiftSpeed', 'flShiftLoop', 'flImperfect', 'flImperfectScale', 'glassGrain', 'glassBlur'] },
   reededPrism: { mix: 1, seed: 1, keys: ['flutedPattern', 'ribWidth', 'refractAmount', 'prismDisplacement', 'causticHighlight', 'grooveShadow', 'angle', 'curvature', 'glassGrain', 'glassBlur'] },
   pixelGlass: { mix: 1, seed: 1, tint: 1, keys: ['pixelCell', 'pixelScaleMix', 'pixelPatch', 'pixelRefract', 'pixelBevel', 'pixelMagnify', 'pixelFrost', 'pixelHighlight', 'pixelShadow', 'pixelSparkle', 'pixelGrain', 'pixelChroma'] },
   glassReflection: { keys: ['reflectionAmount', 'reflectionAngle', 'beamWidth', 'mirrorOpacity', 'mirrorFlip', 'reflectionBlur', 'reflectionTint', 'causticGlare', 'fresnelRim'] },
