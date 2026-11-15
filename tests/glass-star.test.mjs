@@ -29,7 +29,12 @@ ok(gpor.flAmount.def === 1.14 && gpor.flDispersion.def === 0.379, 'Amount 1.14 �
 ok(gpor.flReflection.def === 1 && gpor.flReflScale.def === 0.95, 'Reflection 1.00 · Reflection Scale 0.95');
 ok(gpor.flPatternType.def === '1' && gpor.flRepeats.def === 19 && gpor.flAngle.def === 0 && gpor.flContrast.def === 4,
   'Pattern Type 1 · Repeats 19 · Angle 0 · Contrast 4.00');
-ok(gpor.flShiftSpeed.def === 1 && gpor.flShiftLoop.def === 5, 'Shift Speed 1.0 · Shift Loop 5.0 sec');
+ok(gpor.flShiftSpeed === undefined && gpor.flShiftLoop === undefined, 'Shift Speed/Shift Loop removidos do inspetor (1.10.0)');
+ok(gpor.causticHighlight.def === 45 && gpor.causticHighlight.label === 'Caustic' && gpor.grooveShadow.def === 32 && gpor.grooveShadow.label === 'Shadow',
+  'Caustic (causticHighlight 0-100, def 45) e Shadow (grooveShadow 0-100, def 32) restaurados com os IDs antigos');
+ok(gpor.flReflection.label === 'Highlight (Reflection)', 'Highlight = o controle Reflection existente (sem duplicar slider)');
+ok(/keys: \['flBlend'[\s\S]*?'causticHighlight', 'grooveShadow'/.test(html) && !/keys: \['flBlend'[^\]]*flShift/.test(html),
+  'modo Fluted mostra Caustic/Shadow e nenhum Shift');
 ok(gpor.flImperfect.def === 0.3 && gpor.flImperfectScale.def === 10, 'Imperfections 0.30 · Scale 10.0');
 ok(/flutedPrism: \{ mix: 1, seed: 1, keys: \['flBlend'/.test(html), 'modo Fluted mostra o painel novo (glassKeysVisiveis)');
 
@@ -49,9 +54,13 @@ ok(spor.colorize.def === 1 && spor.gradShift.def === 0.23
 
 console.log('Fluted · matemática pura');
 
-const FP = new Function(extrai('/* FLUTED_PURO_INI */', '/* FLUTED_PURO_FIM */') + '\nreturn { flutedFase, flutedPerfil, flutedNorm };')();
-ok(Math.abs(FP.flutedFase(5, 1, 5)) < 1e-9 && Math.abs(FP.flutedFase(2.5, 1, 5) - 0.5) < 1e-9 && FP.flutedFase(3, 0, 5) === 0,
-  'Shift: fase fecha o loop em Shift Loop segundos (sem salto) e Speed 0 é estático');
+const FP = new Function(extrai('/* FLUTED_PURO_INI */', '/* FLUTED_PURO_FIM */') + '\nreturn { flutedFase: typeof flutedFase !== "undefined" ? flutedFase : undefined, flutedPerfil, flutedNorm };')();
+ok(typeof FP.flutedFase === 'undefined' && !html.includes('flutedAnimTick') && !html.includes('flutedAnimKick') && !html.includes('flShiftSpeed'),
+  'sem Shift: função de fase, laço de animação e parâmetros fora do código');
+const comCaustic = FP.flutedNorm({ causticHighlight: 80, grooveShadow: 0 });
+ok(Math.abs(comCaustic.caustic - 0.8) < 0.001 && comCaustic.shadow === 0, 'norm: Caustic 80 -> 0,8 e Shadow 0 -> 0 (contribuição some sozinha)');
+const perfilC = FP.flutedPerfil(0.62, 4, 0.95);
+ok(perfilC.length === 4 && perfilC[3] > 0 && FP.flutedPerfil(0.02, 4, 0.95)[3] < perfilC[3], 'perfil: termo Caustic próprio, concentrado pós-crista');
 const [s0, hMeio] = [FP.flutedPerfil(0, 4, 0.95), FP.flutedPerfil(0.5, 4, 0.95)];
 ok(s0[0] > 0.9 && Math.abs(hMeio[0]) < 0.05 && hMeio[1] > 0.3, 'perfil: parede inclinada nas bordas, crista brilhante no centro do sulco');
 ok(FP.flutedPerfil(0.25, 6, 0.95)[0] > FP.flutedPerfil(0.25, 0.5, 0.95)[0], 'Pattern Contrast maior = parede do sulco mais definida (slope maior)');
@@ -78,8 +87,7 @@ ok(/lutS = new Float32Array\(LUTN\)/.test(html) && /Math\.exp\(-Math\.pow\(\(hex
   'Fluted linear/wavy usa LUT de 256 (exp/pow só restam nos tipos hex/grid, 1x por render na LUT)');
 ok(/if \(mix <= 0\.001\) \{ ctx\.drawImage\(srcCanvas, 0, 0\); return cv; \}/.test(html), 'Glass Opacity (Blend) 0: retorna a fonte sem rodar o loop');
 ok(/if \(o\.opacity <= 0\.001 \|\| o\.intensity <= 0\.001\) return cv;/.test(html), 'Star Glow Opacity 0: retorna a fonte intacta');
-ok(/flutedAnimTick/.test(html) && /document\.hidden/.test(html) && /flutedAnimTimer = setTimeout\(flutedAnimTick, 33\)/.test(html),
-  'animação do Shift: laço próprio que para sem nó animado/aba oculta');
+ok(/o\.caustic \* 255/.test(html) && /o\.shadow \* 1\.7/.test(html), 'motor: Caustic soma luz refratada e Shadow escala a sombra do vale (0 apaga só a contribuição)');
 ok(/const gs = Math\.min\(1, 640 \/ Math\.max\(W, H\)\)/.test(html), 'Star Glow calcula o brilho em ≤640px (preview = exportação)');
 ok(html.includes("!('flAmount' in opts.params)") && html.includes("!('streaks' in opts.params)"), 'createNode migra Glass e Star Glow antigos');
 
