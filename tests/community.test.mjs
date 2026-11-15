@@ -139,7 +139,7 @@ ok(/\.cmty-th\{[^}]*height:165px/.test(css) && /object-fit:cover/.test(css), 'mi
 ok(/\.cmty-badge\.ig\{/.test(css) && /\.cmty-badge\.tb\{/.test(css), 'selo por plataforma (Instagram / Tumblr)');
 
 /* ---------------------------------------------------------------- os cartões */
-const card = extrai('function cmtyCard(it) {', '/* no app, target="_blank"');
+const card = extrai('function cmtyCard(it, clone) {', '/* no app, target="_blank"');
 ok(/a\.target = '_blank'/.test(card), 'abre o post em aba nova');
 ok(/a\.rel = 'noopener noreferrer'/.test(card), 'sem acesso à janela do editor');
 ok(/a\.href = it\.url/.test(card), 'o link é o do post original');
@@ -202,11 +202,11 @@ ok(daTagGlobal.length === 1 && daTagGlobal[0].img === 'https://64.media.tumblr.c
   'post NPF com imagem entra; o de texto puro fica fora', daTagGlobal.length);
 
 /* ---------------------------------------------------------------- dados e APK */
-const dados = extrai('function cmtyForaDoSite() {', 'function cmtyCard(it) {');
+const dados = extrai('function cmtyForaDoSite() {', 'function cmtyCard(it, clone) {');
 ok(/localStorage\.setItem\(CMTY_CACHE/.test(html) && /localStorage\.getItem\(CMTY_CACHE/.test(html), 'cacheia no navegador');
 ok(/const itens = cmtyValidos\(dados && dados\.items\)/.test(html), 'valida antes de desenhar');
 ok(/const seed = cmtyValidos\(CMTY_SEED\)/.test(html), 'cai no seed quando não há feed (APK offline)');
-ok(/const volta = itens\.concat\(itens\)/.test(html), 'duas cópias no trilho para o laço não ter emenda');
+ok(/track\.scrollWidth < vw/.test(html) && /cloneNode\(true\)/.test(html), 'metade preenchida >= janela e duplicada: laço sem emenda nem vão');
 ok(/const CMTY_JSON = 'community\/feed\.json'/.test(html), 'o feed mora junto das miniaturas (community/)');
 ok(/CMTY_CACHE = 'ee_community_v2'/.test(html), 'chave de cache nova: o cache antigo tinha o feed sem filtro');
 ok(!/CMTY_TTL/.test(html), 'não existe mais validade de cache que segura o feed');
@@ -221,7 +221,7 @@ ok(/cmtyNaHome\(\);/.test(extrai('function startScreenOpen() {', 'window.startSc
 ok(/window\.cmtyCarrega = cmtyCarrega/.test(html), 'exposto para depurar no console');
 
 /* ---------------------------------------------------------------- puro, rodando */
-const fonte = extrai('const CMTY_JSON =', 'function cmtyCard(it) {');
+const fonte = extrai('const CMTY_JSON =', 'function cmtyCard(it, clone) {');
 const monta = (protocolo) => new Function('location', fonte +
   '\nreturn { cmtyValidos, cmtyEndereco, cmtyForaDoSite };')({ protocol: i => ({ protocol: protocolo }) }.protocol(protocolo));
 const web = new Function('location', fonte + '\nreturn { cmtyValidos, cmtyEndereco, cmtyForaDoSite };')({ protocol: 'https:' });

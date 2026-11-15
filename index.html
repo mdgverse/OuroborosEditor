@@ -82,6 +82,10 @@
 .cmty-vp{overflow:hidden;position:relative;-webkit-mask-image:linear-gradient(90deg,transparent,#000 26px,#000 calc(100% - 26px),transparent);mask-image:linear-gradient(90deg,transparent,#000 26px,#000 calc(100% - 26px),transparent)}
 .cmty-track{display:flex;width:max-content;animation:cmtyGo var(--cmty-dur,60s) linear infinite;will-change:transform}
 .cmty-vp:hover .cmty-track,.cmty-vp:focus-within .cmty-track{animation-play-state:paused}
+.cmty-vp{cursor:grab;touch-action:pan-y}
+.cmty-vp.fora .cmty-track,.cmty-vp.arrastando .cmty-track{animation-play-state:paused}
+.cmty-vp.arrastando{cursor:grabbing}
+.cmty-vp.arrastando .cmty-card{pointer-events:none}
 @keyframes cmtyGo{from{transform:translateX(0)}to{transform:translateX(-50%)}}
 .cmty-card{flex:none;width:132px;margin-right:12px;display:flex;flex-direction:column;gap:6px;text-decoration:none;color:inherit;border-radius:10px;outline-offset:3px}
 .cmty-th{width:132px;height:165px;border-radius:10px;overflow:hidden;background:var(--edge);border:1px solid var(--line);box-sizing:border-box}
@@ -483,7 +487,7 @@ html, body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent}/* 1
 
 /* Versão do editor — o arquivo VERSION na raiz é a fonte da verdade
    (o build do APK usa o mesmo número no versionName e falha se divergir). */
-const APP_VERSION = '1.8.0';
+const APP_VERSION = '1.9.0';
 /* tooltip do botão da marca: só o nome do produto (a versão é metadado, não entra na marca) */
 {
   const marca = document.getElementById('brandBtn');
@@ -12634,7 +12638,14 @@ function blobAnalisar(data, w, h, o, saida) {
   const masc = new Uint8Array(total);
   let claros = 0;
   for (let i = 0; i < total; i++) { if (lum[i] >= limiar) { masc[i] = 1; claros++; } }
-  if (claros > total / 2) {           // fundo claro: os blobs são as regiões escuras
+  /* Polaridade pela BORDA do quadro (o fundo encosta na borda): se a borda
+     é clara, os blobs são as regiões escuras. Diferente da regra antiga
+     ("maioria inverte"), esta NÃO troca de lado quando a Sensitivity
+     muda — a máscara cresce monotonicamente com ela. */
+  let bordaSoma = 0, bordaN = 0;
+  for (let x = 0; x < w; x++) { bordaSoma += lum[x] + lum[(h - 1) * w + x]; bordaN += 2; }
+  for (let y = 1; y < h - 1; y++) { bordaSoma += lum[y * w] + lum[y * w + w - 1]; bordaN += 2; }
+  if (bordaN && bordaSoma / bordaN > 0.5) {
     for (let i = 0; i < total; i++) masc[i] = lum[i] <= 1 - limiar ? 1 : 0;
   }
   /* Key Color (1.7.0): a máscara ALSO exige proximidade da cor-chave.
@@ -12671,8 +12682,8 @@ function blobAnalisar(data, w, h, o, saida) {
     if (!masc[i]) continue;
     const r = acha(rot[i]);
     let st = stats.get(r);
-    if (!st) { st = { area: 0, sx: 0, sy: 0, x0: x, y0: y, x1: x, y1: y, membros: [r] }; stats.set(r, st); }
-    st.area++; st.sx += x; st.sy += y;
+    if (!st) { st = { area: 0, sx: 0, sy: 0, x0: x, y0: y, x1: x, y1: y, membros: [r], pixels: [] }; stats.set(r, st); }
+    st.area++; st.sx += x; st.sy += y; st.pixels.push(i);
     if (x < st.x0) st.x0 = x; if (x > st.x1) st.x1 = x;
     if (y < st.y0) st.y0 = y; if (y > st.y1) st.y1 = y;
   }
@@ -12688,7 +12699,7 @@ function blobAnalisar(data, w, h, o, saida) {
         const dx = Math.max(0, Math.max(A.x0 - B.x1, B.x0 - A.x1) - 1);
         const dy = Math.max(0, Math.max(A.y0 - B.y1, B.y0 - A.y1) - 1);
         if (Math.hypot(dx, dy) <= mergeDist) {
-          A.area += B.area; A.sx += B.sx; A.sy += B.sy;
+          A.area += B.area; A.sx += B.sx; A.sy += B.sy; A.pixels.push(...B.pixels);
           A.x0 = Math.min(A.x0, B.x0); A.y0 = Math.min(A.y0, B.y0);
           A.x1 = Math.max(A.x1, B.x1); A.y1 = Math.max(A.y1, B.y1);
           A.membros.push(...B.membros);
@@ -12697,15 +12708,48 @@ function blobAnalisar(data, w, h, o, saida) {
       }
     }
   }
+  /* Subdivisão (1.9.0): componente maior que o Max Size NÃO é mais
+     descartado — é dividido pela mediana de luminância dos próprios
+     pixels, recursivamente (até 5 níveis). É o que permite vários
+     blobs DENTRO de um assunto grande e impede o colapso da
+     Sensitivity máxima (a imagem inteira viraria um blob só, que o
+     Max Size jogava fora e sobrava zero detecções). Região uniforme
+     não divide (os dois lados precisam ter pixels suficientes). */
+  const minS0 = Math.min(1, Math.max(0, Number(o.minSize ?? 0.03)));
+  const maxS0 = Math.min(1, Math.max(minS0, Number(o.maxSize ?? 0.35)));
+  const minPix = Math.max(8, Math.round(minS0 * total * 0.5));
+  const divide = (pxs, prof) => {
+    if (prof >= 5 || pxs.length <= maxS0 * total || pxs.length < minPix * 2) return [pxs];
+    const hist = new Uint32Array(256);
+    for (const i of pxs) hist[Math.min(255, Math.max(0, (lum[i] * 255) | 0))]++;
+    let acc = 0, med = 0;
+    for (let vI = 0; vI < 256; vI++) { acc += hist[vI]; if (acc >= pxs.length / 2) { med = vI / 255; break; } }
+    const A = [], B = [];
+    for (const i of pxs) (lum[i] <= med ? A : B).push(i);
+    if (A.length < minPix || B.length < minPix) return [pxs];
+    return [...divide(A, prof + 1), ...divide(B, prof + 1)];
+  };
+  let grupos = [];
+  for (const b of blobs) grupos.push(...divide(b.pixels, 0));
+  blobs = grupos.map(pxs => {
+    let area = 0, sx2 = 0, sy2 = 0, x0 = w, y0 = h, x1 = -1, y1 = -1;
+    for (const i of pxs) {
+      const x = i % w, y = (i / w) | 0;
+      area++; sx2 += x; sy2 += y;
+      if (x < x0) x0 = x; if (x > x1) x1 = x;
+      if (y < y0) y0 = y; if (y > y1) y1 = y;
+    }
+    return { area, sx: sx2, sy: sy2, x0, y0, x1, y1 };
+  });
+  const grupoDe = new Int32Array(total).fill(-1);
+  grupos.forEach((pxs, gi) => { for (const i of pxs) grupoDe[i] = gi; });
   /* contorno: pontos de borda agrupados por ângulo em volta do centróide */
-  const membroDe = new Map();
-  blobs.forEach((b, bi) => b.membros.forEach(m => membroDe.set(m, bi)));
   const bordas = blobs.map(() => new Array(40).fill(null));
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
     const i = y * w + x;
     if (!masc[i]) continue;
-    const bi = membroDe.get(acha(rot[i]));
-    if (bi === undefined) continue;
+    const bi = grupoDe[i];
+    if (bi < 0) continue;
     if ((x > 0 && masc[i - 1]) && (x < w - 1 && masc[i + 1]) && (y > 0 && masc[i - w]) && (y < h - 1 && masc[i + w])) continue;
     const b = blobs[bi], cx = b.sx / b.area, cy = b.sy / b.area;
     const ang = Math.atan2(y - cy, x - cx);
@@ -12775,7 +12819,7 @@ function fxBlobTrack(srcCanvas, W, H, p, runtime) {
   const cv = fx7NewCanvas(W, H);
   const g = cv.getContext('2d', { willReadFrequently: true });
   g.drawImage(srcCanvas, 0, 0);
-  const maxDim = p.fineTune === 'yes' ? 512 : 288;
+  const maxDim = p.fineTune === 'yes' ? 640 : 384;   // 1.9.0: análise maior p/ regiões pequenas não sumirem no downscale
   const esc = Math.min(1, maxDim / Math.max(W, H));
   const aw = Math.max(8, Math.round(W * esc)), ah = Math.max(8, Math.round(H * esc));
   const mini = fx7NewCanvas(aw, ah);
@@ -35977,9 +36021,10 @@ function cmtyValidos(lista) {
   }
   return saida;
 }
-function cmtyCard(it) {
+function cmtyCard(it, clone) {
   const a = document.createElement('a');
   a.className = 'cmty-card';
+  if (clone) { a.setAttribute('aria-hidden', 'true'); a.tabIndex = -1; }   // cópia do laço: fora do foco e do leitor de tela
   a.href = it.url;
   a.target = '_blank';
   a.rel = 'noopener noreferrer';
@@ -36004,7 +36049,6 @@ function cmtyCard(it) {
     it.platform === 'tumblr' ? 'Tumblr' : 'Instagram'));
   a.appendChild(th);
   a.appendChild(who);
-  a.addEventListener('click', e => cmtyAbre(e, it.url));
   return a;
 }
 /* no app, target="_blank" pode não abrir: tenta a janela nova e, se não houver, navega */
@@ -36018,15 +36062,113 @@ function cmtyAbre(e, url) {
 function cmtyMostra(itens) {
   const sec = document.getElementById('cmty');
   const track = document.getElementById('cmtyTrack');
+  const vp = document.getElementById('cmtyVp');
   if (!sec || !track) return;
   cmtyItens = itens;
-  track.textContent = '';
   sec.hidden = !itens.length;
-  if (!itens.length) return;
-  const volta = itens.concat(itens);            // duas cópias: o laço não tem emenda
-  for (const it of volta) track.appendChild(cmtyCard(it));
+  if (!itens.length) { track.textContent = ''; return; }
+  const faseAntes = cmtyFase(track);
+  track.textContent = '';
+  for (const it of itens) track.appendChild(cmtyCard(it));
+  /* O laço anda -50% do trilho: cada METADE precisa ser mais larga que a
+     janela, senão sobra um vão vazio antes do salto (era a regressão:
+     2 cópias de um feed curto não enchiam telas largas). Repete o feed
+     até encher a metade; tudo que é cópia sai do foco/leitor de tela. */
+  const vw = vp ? vp.clientWidth : 0;
+  let guard = 0;
+  while (vw > 0 && track.scrollWidth < vw && guard++ < 10) for (const it of itens) track.appendChild(cmtyCard(it, true));
+  for (const el of Array.from(track.children)) {
+    const c = el.cloneNode(true);
+    c.setAttribute('aria-hidden', 'true'); c.tabIndex = -1;
+    track.appendChild(c);
+  }
   track.style.setProperty('--cmty-dur', Math.max(28, itens.length * 4.2) + 's');
   track.dataset.total = String(itens.length);
+  if (faseAntes !== null) cmtyFaseRestaura(track, faseAntes);
+  cmtyInteracao();
+}
+/* fase atual da animação (0..1) p/ remontar sem salto (resize/feed novo) */
+function cmtyFase(track) {
+  try {
+    const a = track.getAnimations && track.getAnimations()[0];
+    if (!a || !a.effect) return null;
+    const dur = a.effect.getTiming().duration;
+    return dur ? ((a.currentTime || 0) % dur) / dur : null;
+  } catch (_) { return null; }
+}
+function cmtyFaseRestaura(track, fase) {
+  requestAnimationFrame(() => {
+    try {
+      const a = track.getAnimations && track.getAnimations()[0];
+      if (a && a.effect) a.currentTime = fase * a.effect.getTiming().duration;
+    } catch (_) {}
+  });
+}
+let cmtyInterPronto = false, cmtySuprime = 0;
+function cmtyInteracao() {
+  if (cmtyInterPronto) return;
+  const vp = document.getElementById('cmtyVp');
+  const track = document.getElementById('cmtyTrack');
+  if (!vp || !track) return;
+  cmtyInterPronto = true;
+  /* clique delegado: vale p/ cartões originais e clones (cloneNode não
+     copia listeners) e respeita o clique suprimido pós-arrasto */
+  track.addEventListener('click', e => {
+    if (Date.now() < cmtySuprime) { e.preventDefault(); e.stopPropagation(); return; }
+    const a = e.target && e.target.closest ? e.target.closest('.cmty-card') : null;
+    if (a) cmtyAbre(e, a.href);
+  }, true);
+  /* fora da tela: pausa (não gasta animação à toa) */
+  if ('IntersectionObserver' in window) {
+    new IntersectionObserver(en => { vp.classList.toggle('fora', !en[0].isIntersecting); }, { threshold: 0.02 }).observe(vp);
+  }
+  /* janela mudou de largura: remonta as metades sem perder a fase */
+  if ('ResizeObserver' in window) {
+    let larg = vp.clientWidth, t = 0;
+    new ResizeObserver(() => {
+      if (Math.abs(vp.clientWidth - larg) < 24) return;
+      larg = vp.clientWidth;
+      clearTimeout(t);
+      t = setTimeout(() => { if (cmtyItens.length) cmtyMostra(cmtyItens); }, 220);
+    }).observe(vp);
+  }
+  /* arrasto (mouse/toque): mexe no relógio da MESMA animação — o laço
+     continua válido ao soltar; arrasto > 8px não abre o cartão */
+  const reduz = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduz) return;   // modo reduzido já é rolagem manual (CSS)
+  let arr = null;
+  vp.addEventListener('pointerdown', e => {
+    if (e.button !== undefined && e.button > 0) return;
+    const a = track.getAnimations && track.getAnimations()[0];
+    if (!a) return;
+    arr = { x: e.clientX, tempo: a.currentTime || 0, moveu: false };
+    a.pause();
+    vp.classList.add('arrastando');
+    try { vp.setPointerCapture(e.pointerId); } catch (_) {}
+  });
+  vp.addEventListener('pointermove', e => {
+    if (!arr) return;
+    const a = track.getAnimations && track.getAnimations()[0];
+    if (!a || !a.effect) return;
+    const dur = a.effect.getTiming().duration || 60000;
+    const metade = track.scrollWidth / 2;
+    if (!metade) return;
+    const dx = e.clientX - arr.x;
+    if (Math.abs(dx) > 8) arr.moveu = true;
+    let nt = (arr.tempo - dx / metade * dur) % dur;
+    if (nt < 0) nt += dur;
+    a.currentTime = nt;
+  });
+  const fim = () => {
+    if (!arr) return;
+    const a = track.getAnimations && track.getAnimations()[0];
+    if (a) a.play();
+    if (arr.moveu) cmtySuprime = Date.now() + 250;
+    arr = null;
+    vp.classList.remove('arrastando');
+  };
+  vp.addEventListener('pointerup', fim);
+  vp.addEventListener('pointercancel', fim);
 }
 /* assinatura do carrossel: muda quando o feed muda (e só aí vale repintar) */
 function cmtyAssinatura(lista) { return (lista || []).map(i => i.url).join('|'); }

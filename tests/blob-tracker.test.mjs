@@ -129,6 +129,30 @@ for (let f = 0; f < 20; f++) vivos = P.blobAtribuirIds(vivos, [], q2.proxId, W, 
 ok(vivos.length === 0, 'Persistence: fantasmas expiram (nada fica para sempre)');
 ok(P.blobAtribuirIds(q2.blobs, [], q2.proxId, W, H, 0).blobs.length === 0, 'Persistence 0: some no quadro seguinte');
 
+console.log('Blob Tracker · subdivisão e Sensitivity (correção 1.9.0)');
+
+function gradiente(w, h) {
+  const d = new Uint8ClampedArray(w * h * 4);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const i = (y * w + x) * 4, v = x < 5 || x > 94 || y < 5 || y > 74 ? 0 : Math.round(60 + (x - 5) / 89 * 180);
+    d[i] = v; d[i + 1] = v; d[i + 2] = v; d[i + 3] = 255;
+  }
+  return d;
+}
+const cenaGrad = gradiente(W, H);
+const sensBase = P.blobAnalisar(cenaGrad, W, H, { ...base, maxSize: 0.35 });
+const sensMax = P.blobAnalisar(cenaGrad, W, H, { ...base, sensitivity: 1, maxSize: 0.35 });
+ok(sensBase.length >= 1, 'assunto grande com variação interna: ao menos uma região', sensBase.length);
+ok(sensMax.length >= 3, 'Sensitivity máxima NÃO colapsa: subdivide o assunto em várias regiões', sensMax.length);
+ok(sensMax.every(b => b.frac <= 0.36), 'após subdividir, nenhum blob estoura o Max Size', sensMax.map(b => b.frac.toFixed(2)).join(','));
+const masc03 = {}, masc09 = {};
+P.blobAnalisar(cenaGrad, W, H, { ...base, sensitivity: 0.3 }, masc03);
+P.blobAnalisar(cenaGrad, W, H, { ...base, sensitivity: 0.9 }, masc09);
+const conta = m => m.masc.reduce((a, v) => a + v, 0);
+ok(conta(masc09) >= conta(masc03), 'máscara cresce monotonicamente com a Sensitivity (polaridade estável pela borda)', conta(masc03) + '->' + conta(masc09));
+const uniforme = P.blobAnalisar(cena(W, H, [[5, 5, 94, 74]]), W, H, { ...base, maxSize: 0.35 });
+ok(uniforme.length === 0, 'região uniforme gigante continua respeitando o Max Size (não subdivide sem variação)');
+
 ok(/blobTracker: \(n, \[a\]\) => \(a \? fx7Canvas/.test(html), 'RUN usa o pipeline de canvas existente (fx7Canvas)');
 ok(/rt\._blobPrev/.test(html) && /n\.runtime/.test(html), 'estado do tracking mora no runtime (nunca serializa)');
 

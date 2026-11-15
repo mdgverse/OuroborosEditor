@@ -103,6 +103,8 @@ jobs:
         run: node tests/pixel-sort.test.mjs
       - name: Glass Fluted + Star Glow (painéis, matemática e performance)
         run: node tests/glass-star.test.mjs
+      - name: Carrossel infinito da comunidade (laço sem vão)
+        run: node tests/carousel-loop.test.mjs
       - name: Versão (VERSION = index.html = APK)
         run: node tests/version.test.mjs
       - name: Higiene (código morto, CSS sem uso, reference/ fora)
