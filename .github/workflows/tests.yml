@@ -101,6 +101,8 @@ jobs:
         run: node tests/blob-tracker.test.mjs
       - name: Pixel Sort / Sorted (direções, chaves, spans e Seed)
         run: node tests/pixel-sort.test.mjs
+      - name: Glass Fluted + Star Glow (painéis, matemática e performance)
+        run: node tests/glass-star.test.mjs
       - name: Versão (VERSION = index.html = APK)
         run: node tests/version.test.mjs
       - name: Higiene (código morto, CSS sem uso, reference/ fora)
