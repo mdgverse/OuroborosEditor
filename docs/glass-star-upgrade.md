@@ -128,3 +128,32 @@ azul-brancas com decaimento, sobre a imagem original preservada.
   estrutural (painel/fiação) e o benchmark sintético acima. A
   comparação visual com a flor da referência e o arraste de sliders
   em 4K ficam para a validação no app publicado.
+
+## 6. Ajuste 1.10.0 — Shift removido, intensidades restauradas
+
+- **Removidos** do modo Fluted: os controles Shift Speed/Shift Loop,
+  a função de fase, o deslocamento animado no motor e o laço
+  `flutedAnim*` inteiro (defs, defaults, RUN e driver). O modo volta
+  a ser **estático**: só re-renderiza quando entrada/parâmetro muda
+  (cache por `dirty`), como os demais modos. Valores de Shift salvos
+  em projetos 1.8/1.9 viram chaves inertes no `params` — nada os lê,
+  nada quebra ao abrir/salvar. Nenhum outro modo do Glass Studio
+  tinha controles de animação próprios afetados.
+- **Restaurados** (recuperados do código pré-1.8.0, que nunca saiu
+  do arquivo — só da visibilidade do modo): `causticHighlight`
+  (0–100, default 45, rótulo original "Specular / caustic glow",
+  agora exibido como **Caustic**) e `grooveShadow` (0–100, default
+  32, rótulo original "Groove shadow", agora **Shadow**). IDs,
+  faixas e defaults são os recuperados; os rótulos seguem os nomes
+  pedidos. Valores salvos de projetos antigos voltam a valer
+  automaticamente (as chaves nunca deixaram de ser salvas).
+- **Highlight**: a inspeção confirma que o controle **Reflection**
+  (1.8.0) é a força do brilho de crista — ou seja, o próprio
+  Highlight. Para não duplicar, ele foi renomeado no inspetor para
+  **Highlight (Reflection)** e nenhuma chave nova foi criada.
+- Separação no motor (LUT): Highlight = brilho amplo de crista
+  (× Highlight (Reflection)); **Caustic** = faixa estreita de luz
+  refratada concentrada pós-crista (`pow(h,5)`), somada à parte;
+  **Shadow** = escala da sombra do vale (×1,7, default 0,32 ≈
+  profundidade de antes). Cada um em 0 apaga **só a sua**
+  contribuição — a refração das estrias (Amount/Dispersion) continua.
