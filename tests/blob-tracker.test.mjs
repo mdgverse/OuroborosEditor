@@ -29,20 +29,35 @@ ok(por.minSize.def === 0.03 && por.maxSize.def === 0.35 && por.maxBlobs.def === 
 ok(por.fineTune.def === 'no', 'Fine Tune desligado por padrão');
 ok(por.lineWidth.def === 1.5 && por.padding.def === 0.1 && por.colors.def === 'single' && por.color.def === '#FFFFFF',
   'Line Width 1.5 · Padding 0.10 · Colors Single · Color #FFFFFF');
-ok(por.centerMark.def === 'none' && por.inside.def === 'original' && por.dimOutside.def === 0, 'Center Mark None · Inside Original · Dim Outside 0.00');
-ok(por.labels.def === 'yes' && por.text.def === 'id' && por.placement.def === 'above' && por.textSize.def === 12 && por.tagBg.def === 'no',
-  'Labels ligado · Text ID · Placement Above · Text Size 12 · Tag Background desligado');
+ok(por.inside.def === 'original' && por.dimOutside.def === 0, 'Inside Original · Dim Outside 0.00');
+ok(por.labels.def === 'yes' && por.text.def === 'id' && por.tagBg.def === 'no',
+  'Labels ligado · Text ID · Tag Background desligado');
 ok(por.connections.def === 'yes' && por.connect.def === 'chain' && por.line.def === 'solid' && por.lineOpacity.def === 0.6,
   'Connections ligado · Connect Chain · Line Solid · Line Opacity 0.60');
 ok(por.labelColor.def === '#FFFFFF' && por.shapeColor.def === '#FFFFFF' && por.bgColor.def === '#000000'
   && por.lineColor.def === '#FFFFFF' && por.junctionColor.def === '#FFFFFF' && por.arrowColor.def === '#FFFFFF',
   'cores: Label/Shape/Line/Junction/Arrow #FFFFFF, Background #000000');
-ok(noDef.params.filter(d => d.type === 'sec').length === 5, '5 seções: Detection, Visualization, Labels, Connections, Colors');
+ok(noDef.params.filter(d => d.type === 'sec').length === 8, '8 seções (5 originais + Compositing & Detection, Box Visualization, Center & Captions)');
+
+console.log('Blob Tracker · controles novos (2ª referência)');
+
+ok(por.blendMode.def === 'normal' && por.opacity.def === 100, 'Blend Normal · Opacity 100');
+ok(por.keyColor.def === '#FFFFFF' && por.keyThreshold.def === 0.445 && por.persistence.def === 0.93,
+  'Key Color #FFFFFF · Threshold 0.445 · Persistence 0.93');
+ok(por.debugMask.def === 'no' && por.randomPalette.def === 'yes' && por.boxColor.def === '#00E5FF' && por.paletteSet.def === 0,
+  'Debug Mask off · Random Palette on · Box Color ciano · Palette Set 0');
+ok(por.boxBlend.def === 'default' && por.boxThickness.def === 1.5 && por.boxOutlineOpacity.def === 1 && por.boxFillOpacity.def === 0.12,
+  'Box Blend Default · Thickness 1.5 · Outline Opacity 1.00 · Fill Opacity 0.12');
+ok(por.centerType && por.centerType.def === 'none' && por.centerSize.def === 3,
+  'Center Type (modos nomeados; o "4" da referência não é verificável) · Center Size 3.0');
+ok(por.captionPosition.def === 'above' && por.captionSize.def === 22 && por.captionBgOpacity.def === 0.45,
+  'Caption Position Above · Caption Size 22 · Caption Background Opacity 0.45');
+ok(!por.centerMark && !por.placement && !por.textSize, 'Center Mark/Placement/Text Size viraram Center Type/Caption Position/Caption Size (migração em createNode)');
 
 console.log('Blob Tracker · detecção');
 
 const puro = extrai('/* BLOB_PURO_INI */', '/* BLOB_PURO_FIM */');
-const P = new Function(puro + '\nreturn { blobAnalisar, blobAtribuirIds };')();
+const P = new Function(puro + '\nreturn { blobAnalisar, blobAtribuirIds, blobPaleta };')();
 
 function cena(w, h, retangulos, fundo = 0, frente = 255) {
   const d = new Uint8ClampedArray(w * h * 4);
@@ -88,6 +103,31 @@ const q3 = P.blobAtribuirIds(q2.blobs, P.blobAnalisar(cena(W, H, [[60, 40, 84, 6
 ok(q3.blobs.length === 2 && q3.blobs.find(b => Math.abs(b.cx - 72) < 2).id === idParado.id
   && q3.blobs.find(b => Math.abs(b.cx - 10) < 2).id >= q2.proxId,
   'blob que some não deixa overlay fantasma; blob novo ganha ID novo');
+
+console.log('Blob Tracker · cor-chave, paleta e persistência');
+
+const cenaBranca = cena(W, H, [[10, 10, 29, 29]]);
+ok(P.blobAnalisar(cenaBranca, W, H, { ...base, keyColor: '#FFFFFF', keyThreshold: 0.445 }).length === 1,
+  'Key Color branca: o quadrado branco passa na máscara por cor');
+ok(P.blobAnalisar(cenaBranca, W, H, { ...base, keyColor: '#FF0000', keyThreshold: 0.2 }).length === 0,
+  'Key Color vermelha (longe do branco): a máscara por cor bloqueia a detecção');
+const mascSaida = {};
+P.blobAnalisar(cenaBranca, W, H, { ...base, keyColor: '#FFFFFF', keyThreshold: 0.445 }, mascSaida);
+ok(mascSaida.masc && mascSaida.masc[15 * W + 15] === 1 && mascSaida.masc[0] === 0,
+  'Debug Mask expõe a máscara real: 1 dentro do blob, 0 fora');
+const mascVermelha = {};
+P.blobAnalisar(cenaBranca, W, H, { ...base, keyColor: '#FF0000', keyThreshold: 0.2 }, mascVermelha);
+ok(mascVermelha.masc && mascVermelha.masc.every(v => v === 0), 'Key Color longe de tudo: máscara vazia, sem erro');
+
+ok(P.blobPaleta(3, 0) === P.blobPaleta(3, 0) && P.blobPaleta(3, 0) !== P.blobPaleta(4, 0) && P.blobPaleta(3, 0) !== P.blobPaleta(3, 1),
+  'Random Palette: mesma ID = mesma cor; ID ou Palette Set diferente muda a cor');
+
+const some = P.blobAtribuirIds(q2.blobs, [], q2.proxId, W, H, 0.93);
+ok(some.blobs.length === 2 && some.blobs.every(b => b.ghost), 'Persistence 0.93: trilhas sobrevivem ao sumiço (fantasmas)');
+let vivos = some.blobs;
+for (let f = 0; f < 20; f++) vivos = P.blobAtribuirIds(vivos, [], q2.proxId, W, H, 0.93).blobs;
+ok(vivos.length === 0, 'Persistence: fantasmas expiram (nada fica para sempre)');
+ok(P.blobAtribuirIds(q2.blobs, [], q2.proxId, W, H, 0).blobs.length === 0, 'Persistence 0: some no quadro seguinte');
 
 ok(/blobTracker: \(n, \[a\]\) => \(a \? fx7Canvas/.test(html), 'RUN usa o pipeline de canvas existente (fx7Canvas)');
 ok(/rt\._blobPrev/.test(html) && /n\.runtime/.test(html), 'estado do tracking mora no runtime (nunca serializa)');

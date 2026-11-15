@@ -483,7 +483,7 @@ html, body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent}/* 1
 
 /* Versão do editor — o arquivo VERSION na raiz é a fonte da verdade
    (o build do APK usa o mesmo número no versionName e falha se divergir). */
-const APP_VERSION = '1.6.0';
+const APP_VERSION = '1.7.0';
 /* tooltip do botão da marca: só o nome do produto (a versão é metadado, não entra na marca) */
 {
   const marca = document.getElementById('brandBtn');
@@ -930,6 +930,30 @@ const FILE  = (key, label, accept = 'image/*') => ({ type: 'file', key, label, a
 const LOCK  = (key, label, def = 'locked') => ({ type: 'lock', key, label, def });   // on/off lock with an icon
 const BTN   = (key, label, action, button) => ({ type: 'button', key, label, action, button, def: '' });
 const FONT  = (key, label, def) => ({ type: 'font', key, label, def });
+
+/* Pixel Sort / Sorted (1.7.0): painel da referência — Sort / Spans / Refine /
+   Advanced. Os dois nós compartilham a MESMA lista (e o mesmo motor
+   psOrdenar); projetos antigos são migrados em createNode (mode/threshold
+   viram Span Mode + faixa) e psNorm ainda aceita os valores legados. */
+const PSORT_PARAMS = [
+  SEC('psSort', 'Sort', 'What is sorted, along which paths, by which key.', true),
+  ENUM('preset', 'Preset', [['custom', 'Custom']], 'custom'),
+  ENUM('direction', 'Direction', [['horizontal', 'Horizontal'], ['vertical', 'Vertical'], ['angle', 'Angle'], ['radial', 'Radial'], ['circular', 'Circular']], 'vertical'),
+  NUM('angleDeg', 'Angle', -180, 180, 90, 1),
+  NUM('centerX', 'Center X', 0, 100, 50, 0.5), NUM('centerY', 'Center Y', 0, 100, 50, 0.5),
+  ENUM('sortKey', 'Sort Key', [['luminance', 'Luminance'], ['lightness', 'Lightness'], ['value', 'Value'], ['saturation', 'Saturation'], ['hue', 'Hue'], ['alpha', 'Alpha']], 'luminance'),
+  ENUM('order', 'Order', [['asc', 'Ascending'], ['desc', 'Descending']], 'desc'),
+  SEC('psSpans', 'Spans', 'Which stretches of each path get sorted.', true),
+  ENUM('spanMode', 'Span Mode', [['band', 'Brightness Band'], ['random', 'Random Lengths'], ['edges', 'Between Edges'], ['whole', 'Whole Line']], 'band'),
+  NUM('brightLow', 'Brightness Low', 0, 1, 0.165, 0.001), NUM('brightHigh', 'Brightness High', 0, 1, 0.55, 0.001),
+  NUM('randMin', 'Random Min Length', 1, 4096, 24), NUM('randMax', 'Random Max Length', 1, 8192, 240),
+  NUM('edgeThr', 'Edge Threshold', 0, 1, 0.25, 0.01),
+  SEC('psRefine', 'Refine', 'Deterministic skipping and seed.', true),
+  NUM('skipSpans', 'Skip Spans', 0, 1, 0.101, 0.001),
+  NUM('seed', 'Seed', 0, 9999, 0), BTN('seedDice', 'Seed', 'psSeed', '🎲 Randomize'),
+  SEC('psAdv', 'Advanced', 'Run limits and blending with the source.', true),
+  NUM('maxRun', 'Max Run Length', 1, 16384, 4588), NUM('mixSrc', 'Mix With Source', 0, 1, 1, 0.01),
+];
 
 /* ===== HalfMode (effect engine; id "halftone" up to 2.9.56) ===== */
 /* ============================================================================
@@ -3138,13 +3162,8 @@ const NODE_TYPES = {
   },
   pixelSort: {
     title: 'Pixel sort', cat: 'filter', inputs: ['Image'],
-    params: [
-      ENUM('direction', 'Direction', [['rows', 'Lines'], ['columns', 'Columns']], 'rows'),
-      ENUM('mode', 'Pixels to sort', [['bright', 'Lights (above threshold)'], ['dark', 'Darks (below threshold)'], ['all', 'Whole line']], 'bright'),
-      NUM('threshold', 'Threshold', 0, 255, 120),
-      ENUM('sortKey', 'Sort by', [['brightness', 'Glow Intensity'], ['hue', 'Hue'], ['saturation', 'Saturation']], 'brightness'),
-      ENUM('order', 'Order', [['asc', 'Crescent'], ['desc', 'Descending']], 'asc'),
-    ],
+    kw: 'pixel sort sorted glitch spans',
+    params: PSORT_PARAMS,
   },
   halfmode: {
     title: 'HalfMode Studio', cat: 'style', inputs: ['Image', 'Ramp (color)'],
@@ -3435,6 +3454,14 @@ const NODE_TYPES = {
     title: 'Blob Tracker', cat: 'matte', inputs: ['Image'],
     kw: 'blob track tracking detection regions labels connections dasca',
     params: [
+      SEC('btCompose', 'Compositing & Detection', 'How the overlay blends in, plus the color key that gates the detection mask.', true),
+      ENUM('blendMode', 'Blend', [['normal', 'Normal'], ['multiply', 'Multiply'], ['screen', 'Screen'], ['overlay', 'Overlay'], ['darken', 'Darken'], ['lighten', 'Lighten']], 'normal'),
+      NUM('opacity', 'Opacity', 0, 100, 100, 1),
+      COL('keyColor', 'Key Color', '#FFFFFF'), NUM('keyThreshold', 'Threshold', 0, 1, 0.445, 0.001),
+      NUM('persistence', 'Persistence', 0, 1, 0.93, 0.01),
+      ENUM('debugMask', 'Debug Mask', [['no', 'Off'], ['yes', 'On']], 'no'),
+      ENUM('randomPalette', 'Random Palette', [['yes', 'On'], ['no', 'Off']], 'yes'),
+      COL('boxColor', 'Box Color', '#00E5FF'), NUM('paletteSet', 'Palette Set', 0, 12, 0, 1),
       SEC('btDetect', 'Detection', 'Which regions of the image become tracked blobs.', true),
       ENUM('track', 'Track', [['details', 'Details'], ['boxes', 'Boxes'], ['points', 'Points']], 'details'),
       NUM('sensitivity', 'Sensitivity', 0, 1, 0.51, 0.01), NUM('softness', 'Softness', 0, 1, 0.8, 0.01),
@@ -3445,14 +3472,22 @@ const NODE_TYPES = {
       NUM('lineWidth', 'Line Width', 0, 10, 1.5, 0.1), NUM('padding', 'Padding', 0, 1, 0.1, 0.01),
       ENUM('colors', 'Colors', [['single', 'Single'], ['byId', 'By ID'], ['bySize', 'By Size']], 'single'),
       COL('color', 'Color', '#FFFFFF'),
-      ENUM('centerMark', 'Center Mark', [['none', 'None'], ['dot', 'Dot'], ['cross', 'Cross']], 'none'),
       ENUM('inside', 'Inside', [['original', 'Original'], ['tint', 'Tint'], ['solid', 'Solid']], 'original'),
       NUM('dimOutside', 'Dim Outside', 0, 1, 0, 0.01),
+      SEC('btBox', 'Box Visualization', 'Bounding-box family: always-box, corner brackets, thickness, blend and opacities.', true),
+      ENUM('boxType', 'Box Type', [['shape', 'Tracker Shape'], ['box', 'Bounding Box'], ['corners', 'Corner Brackets'], ['none', 'None']], 'shape'),
+      ENUM('boxBlend', 'Box Blend', [['default', 'Default'], ['multiply', 'Multiply'], ['screen', 'Screen'], ['overlay', 'Overlay']], 'default'),
+      NUM('boxThickness', 'Box Thickness', 0, 10, 1.5, 0.1),
+      NUM('boxOutlineOpacity', 'Box Outline Opacity', 0, 1, 1, 0.01), NUM('boxFillOpacity', 'Box Fill Opacity', 0, 1, 0.12, 0.01),
+      SEC('btCenter', 'Center & Captions', 'Center marker style/size and caption placement, size and background.', true),
+      ENUM('centerType', 'Center Type', [['none', 'None'], ['dot', 'Dot'], ['cross', 'Cross'], ['ring', 'Ring'], ['diamond', 'Diamond']], 'none'),
+      NUM('centerSize', 'Center Size', 0.5, 40, 3, 0.1),
+      ENUM('captionPosition', 'Caption Position', [['above', 'Above'], ['below', 'Below'], ['center', 'Center']], 'above'),
+      NUM('captionSize', 'Caption Size', 6, 64, 22), NUM('captionBgOpacity', 'Caption Background Opacity', 0, 1, 0.45, 0.01),
       SEC('btLabels', 'Labels', 'Text drawn next to each blob.', true),
       ENUM('labels', 'Labels', [['yes', 'On'], ['no', 'Off']], 'yes'),
       ENUM('text', 'Text', [['id', 'ID'], ['size', 'Size'], ['idSize', 'ID + Size']], 'id'),
-      ENUM('placement', 'Placement', [['above', 'Above'], ['below', 'Below'], ['center', 'Center']], 'above'),
-      NUM('textSize', 'Text Size', 6, 64, 12), ENUM('tagBg', 'Tag Background', [['no', 'Off'], ['yes', 'On']], 'no'),
+      ENUM('tagBg', 'Tag Background', [['no', 'Off'], ['yes', 'On']], 'no'),
       SEC('btConn', 'Connections', 'Lines linking the detected blobs.', true),
       ENUM('connections', 'Connections', [['yes', 'On'], ['no', 'Off']], 'yes'),
       ENUM('connect', 'Connect', [['chain', 'Chain'], ['nearest', 'Nearest'], ['web', 'Web'], ['hub', 'Hub']], 'chain'),
@@ -3732,11 +3767,8 @@ const NODE_TYPES = {
   },
   sortedEffect: {
     title: 'Sorted', cat: 'filter', inputs: ['Image'],
-    params: [
-      ENUM('direction', 'Direction', [['rows', 'Lines'], ['columns', 'Columns']], 'rows'),
-      NUM('threshold', 'Threshold', 0, 255, 128),
-      ENUM('order', 'Order', [['asc', 'Crescent'], ['desc', 'Descending']], 'desc'),
-    ],
+    kw: 'sorted pixel sort glitch spans',
+    params: PSORT_PARAMS,
   },
   astraPathRemix: {
     title: 'Astra Path Remix', cat: 'transform', inputs: ['Image'],
@@ -9949,63 +9981,160 @@ function fx5DispTexture(dataUrl) {
   return entry.ready && !entry.err ? entry : null;
 }
 
-// ---------- Pixel Sort (CPU), same run logic as v1.6 ----------
+/* PSORT_PURO_INI */
+/* Pixel Sort / Sorted: motor puro (sem DOM) — caminhos por direção, chaves
+   de cor, spans (Brightness Band / Random Lengths / Between Edges /
+   Whole Line), Skip Spans e Random por Seed, Max Run Length e Mix.
+   Cada pixel entra em exatamente UM caminho (Horizontal/Vertical por
+   linha/coluna; Angle/Radial/Circular por agrupamento) — a ordenação é
+   sempre uma permutação dos pixels do caminho: nada se perde nem duplica.
+   Tamanho relativo não se aplica aqui; comprimentos são em pixels. */
+function psHash(seed, n) {
+  let x = (seed | 0) ^ Math.imul(n | 0, 0x9E3779B1);
+  x = Math.imul(x ^ (x >>> 15), 0x85EBCA6B); x ^= x >>> 13;
+  x = Math.imul(x, 0xC2B2AE35); x ^= x >>> 16;
+  return (x >>> 0) / 4294967296;
+}
+function psValor(data, i, chave) {
+  const r = data[i], g = data[i + 1], b = data[i + 2], a = data[i + 3];
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  if (chave === 'value') return mx / 255;
+  if (chave === 'lightness') return (mx + mn) / 510;
+  if (chave === 'saturation') {
+    if (!d) return 0;
+    const L = (mx + mn) / 510, den = 1 - Math.abs(2 * L - 1);
+    return den <= 0.0001 ? 0 : Math.min(1, (d / 255) / den);
+  }
+  if (chave === 'hue') {
+    if (!d) return 0;
+    const h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    return (((h * 60) % 360) + 360) % 360 / 360;
+  }
+  if (chave === 'alpha') return a / 255;
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;   // luminance (Rec. 709)
+}
+function psNorm(p) {
+  p = p || {};
+  const dirLeg = { rows: 'horizontal', columns: 'vertical' };
+  const direction = dirLeg[p.direction] || p.direction || 'vertical';
+  const sortKey = p.sortKey === 'brightness' ? 'luminance' : (p.sortKey || 'luminance');
+  let spanMode = p.spanMode, low = Number(p.brightLow ?? 0.165), high = Number(p.brightHigh ?? 0.55);
+  if (!spanMode) {   // projeto antigo: mode + threshold (0..255) viram a faixa
+    const thr = Math.min(1, Math.max(0, Number(p.threshold ?? 120) / 255));
+    if (p.mode === 'all') spanMode = 'whole';
+    else if (p.mode === 'dark') { spanMode = 'band'; low = 0; high = thr; }
+    else { spanMode = 'band'; low = thr; high = 1; }
+  }
+  low = Math.min(1, Math.max(0, low)); high = Math.min(1, Math.max(0, high));
+  if (low > high) { const t = low; low = high; high = t; }   // faixa invertida: vale a faixa entre os dois valores
+  let rMin = Math.max(1, Math.round(Number(p.randMin ?? 24))), rMax = Math.max(1, Math.round(Number(p.randMax ?? 240)));
+  if (rMin > rMax) { const t = rMin; rMin = rMax; rMax = t; }
+  return {
+    direction, sortKey, spanMode, low, high, rMin, rMax,
+    asc: p.order !== 'desc',
+    angleDeg: Number(p.angleDeg ?? 90),
+    cx: Math.min(1, Math.max(0, Number(p.centerX ?? 50) / 100)), cy: Math.min(1, Math.max(0, Number(p.centerY ?? 50) / 100)),
+    edgeThr: Math.min(1, Math.max(0, Number(p.edgeThr ?? 0.25))),
+    skip: Math.min(1, Math.max(0, Number(p.skipSpans ?? 0))),
+    seed: Math.round(Number(p.seed ?? 0)) | 0,
+    maxRun: Math.max(1, Math.round(Number(p.maxRun ?? 4588))),
+    mix: Math.min(1, Math.max(0, Number(p.mixSrc ?? 1))),
+  };
+}
+function psTrilhas(w, h, o) {
+  const trilhas = [];
+  if (o.direction === 'horizontal') {
+    for (let y = 0; y < h; y++) { const t = []; for (let x = 0; x < w; x++) t.push(y * w + x); trilhas.push(t); }
+    return trilhas;
+  }
+  if (o.direction === 'vertical') {
+    for (let x = 0; x < w; x++) { const t = []; for (let y = 0; y < h; y++) t.push(y * w + x); trilhas.push(t); }
+    return trilhas;
+  }
+  const grupos = new Map();
+  const junta = (chave, idx, ordem) => {
+    let g = grupos.get(chave);
+    if (!g) { g = []; grupos.set(chave, g); }
+    g.push([ordem, idx]);
+  };
+  if (o.direction === 'angle') {
+    const rad = o.angleDeg * Math.PI / 180, dx = Math.cos(rad), dy = Math.sin(rad);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++)
+      junta(Math.round(-x * dy + y * dx), y * w + x, x * dx + y * dy);
+  } else {
+    const cx = o.cx * (w - 1), cy = o.cy * (h - 1);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const ddx = x - cx, ddy = y - cy, r = Math.hypot(ddx, ddy);
+      let th = Math.atan2(ddy, ddx); if (th < 0) th += 2 * Math.PI;
+      if (o.direction === 'radial') junta(Math.round(th * 360 / (2 * Math.PI) * 2), y * w + x, r);
+      else junta(Math.round(r), y * w + x, th);   // circular: anéis em volta do centro
+    }
+  }
+  for (const g of grupos.values()) { g.sort((a, b) => a[0] - b[0]); trilhas.push(g.map(e => e[1])); }
+  return trilhas;
+}
+function psOrdenar(data, w, h, p) {
+  const o = psNorm(p);
+  const out = new Uint8ClampedArray(data);
+  const n = w * h;
+  if (!n) return out;
+  const chave = new Float32Array(n), lum = new Float32Array(n);
+  for (let px = 0, i = 0; px < n; px++, i += 4) { chave[px] = psValor(data, i, o.sortKey); lum[px] = psValor(data, i, 'luminance'); }
+  let contadorSpan = 0;
+  const ordenaSpan = idxs => {
+    const meuSpan = contadorSpan++;
+    if (idxs.length < 2) return;
+    if (o.skip > 0 && psHash(o.seed ^ 0x51F15E, meuSpan) < o.skip) return;   // Skip Spans: determinístico pela Seed
+    const lim = Math.min(idxs.length, o.maxRun);   // Max Run Length: ordena só o começo do span
+    const itens = [];
+    for (let k = 0; k < lim; k++) itens.push([chave[idxs[k]], k, idxs[k]]);
+    itens.sort((a, b) => (o.asc ? a[0] - b[0] : b[0] - a[0]) || (a[1] - b[1]));
+    for (let k = 0; k < lim; k++) {
+      const de = itens[k][2] * 4, para = idxs[k] * 4;
+      out[para] = data[de]; out[para + 1] = data[de + 1]; out[para + 2] = data[de + 2]; out[para + 3] = data[de + 3];
+    }
+  };
+  for (const trilha of psTrilhas(w, h, o)) {
+    if (o.spanMode === 'whole') { ordenaSpan(trilha); continue; }
+    if (o.spanMode === 'random') {
+      let i = 0, chunk = 0;
+      while (i < trilha.length) {
+        const len = o.rMin + Math.floor(psHash(o.seed ^ 0xA17, contadorSpan + chunk * 131) * (o.rMax - o.rMin + 1));
+        ordenaSpan(trilha.slice(i, i + Math.max(1, len)));
+        i += Math.max(1, len); chunk++;
+      }
+      continue;
+    }
+    if (o.spanMode === 'edges') {
+      let atual = [trilha[0]];
+      for (let k = 1; k < trilha.length; k++) {
+        if (Math.abs(lum[trilha[k]] - lum[trilha[k - 1]]) > o.edgeThr) { ordenaSpan(atual); atual = [trilha[k]]; }
+        else atual.push(trilha[k]);
+      }
+      ordenaSpan(atual);
+      continue;
+    }
+    /* Brightness Band: trechos contíguos com luminância dentro da faixa */
+    let atual = [];
+    for (const idx of trilha) {
+      if (lum[idx] >= o.low && lum[idx] <= o.high) atual.push(idx);
+      else if (atual.length) { ordenaSpan(atual); atual = []; }
+    }
+    if (atual.length) ordenaSpan(atual);
+  }
+  if (o.mix < 1) {
+    const m = o.mix, im = 1 - m;
+    for (let i = 0; i < out.length; i++) out[i] = Math.round(data[i] * im + out[i] * m);
+  }
+  return out;
+}
+/* PSORT_PURO_FIM */
+
+// ---------- Pixel Sort (CPU): delega ao motor puro psOrdenar ----------
 function fx5PixelSort(a, p, e) {
   const W = a.w, H = a.h;
   const src = flipRows(fx4ReadRes(a), W, H);
-  const out = new Uint8ClampedArray(src);
-  const thr = Number(p.threshold ?? 120);
-  const asc = p.order !== 'desc';
-  const mode = p.mode || 'bright';
-  const keyName = p.sortKey || 'brightness';
-  const lumAt = i => fx5Luma255(src[i], src[i + 1], src[i + 2]);
-  const eligible = i => {
-    if (mode === 'all') return true;
-    const l = lumAt(i);
-    return mode === 'dark' ? l < thr : l > thr;
-  };
-  const sortKey = i => {
-    const r = src[i], g = src[i + 1], b = src[i + 2];
-    const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
-    if (keyName === 'saturation') return mx === 0 ? 0 : (mx - mn) / mx;
-    if (keyName === 'hue') {
-      if (mx === mn) return 0;
-      const d = mx - mn;
-      const h = mx === r ? (g - b) / d : mx === g ? 2 + (b - r) / d : 4 + (r - g) / d;
-      return (h * 60 + 360) % 360;
-    }
-    return fx5Luma255(r, g, b);
-  };
-  const sortRun = offs => {
-    if (offs.length <= 2) return;
-    const items = offs.map(o => ({ o, k: sortKey(o) }));
-    items.sort((x, y) => (asc ? x.k - y.k : y.k - x.k));
-    for (let n = 0; n < offs.length; n++) {
-      const f = items[n].o, t = offs[n];
-      out[t] = src[f]; out[t + 1] = src[f + 1]; out[t + 2] = src[f + 2]; out[t + 3] = src[f + 3];
-    }
-  };
-  if (p.direction === 'columns') {
-    for (let x = 0; x < W; x++) {
-      let y = 0;
-      while (y < H) {
-        while (y < H && !eligible((y * W + x) * 4)) y++;
-        const run = [];
-        while (y < H && eligible((y * W + x) * 4)) { run.push((y * W + x) * 4); y++; }
-        sortRun(run);
-      }
-    }
-  } else {
-    for (let y = 0; y < H; y++) {
-      let x = 0;
-      while (x < W) {
-        while (x < W && !eligible((y * W + x) * 4)) x++;
-        const run = [];
-        while (x < W && eligible((y * W + x) * 4)) { run.push((y * W + x) * 4); x++; }
-        sortRun(run);
-      }
-    }
-  }
+  const out = psOrdenar(src, W, H, p || {});
   fx4WriteRes(e, flipRows(out, W, H));
   return e;
 }
@@ -11246,6 +11375,11 @@ function makeActionButton(n, p) {
       if (n.ui.gpins) n.ui.gpins();
       markDirty(n.id); requestRender(); commit();
     }
+    else if (p.action === 'psSeed') {
+      n.params.seed = Math.floor(Math.random() * 10000);
+      if (n.ui.seed) n.ui.seed();
+      markDirty(n.id); requestRender(); commit();
+    }
     else if (p.action === 'openRampa') rampaEditorAbre(n);
     else if (p.action === 'openWarpPuppet') warpEditorAbre(n);
     else if (p.action === 'openBrush') brushStudioAbre(n);
@@ -12371,7 +12505,7 @@ function blobSuaviza(lum, w, h, r) {
   }
   return out;
 }
-function blobAnalisar(data, w, h, o) {
+function blobAnalisar(data, w, h, o, saida) {
   const sens = Math.min(1, Math.max(0, Number(o.sensitivity ?? 0.51)));
   const limiar = 1 - sens;
   let lum = blobSuaviza(blobLuminancia(data, w, h), w, h, Math.round(Math.min(1, Math.max(0, Number(o.softness ?? 0.8))) * 3));
@@ -12382,6 +12516,21 @@ function blobAnalisar(data, w, h, o) {
   if (claros > total / 2) {           // fundo claro: os blobs são as regiões escuras
     for (let i = 0; i < total; i++) masc[i] = lum[i] <= 1 - limiar ? 1 : 0;
   }
+  /* Key Color (1.7.0): a máscara ALSO exige proximidade da cor-chave.
+     Distância euclidiana RGB normalizada (0 = a cor exata, 1 = o canto
+     oposto do cubo); o pixel entra se dist <= Threshold. Sem keyColor
+     (chamadas antigas/testes) ou Threshold >= 1, a etapa é neutra. */
+  const kc = /^#?([0-9a-f]{6})$/i.exec(String(o.keyColor || ''));
+  const keyThr = Math.min(1, Math.max(0, Number(o.keyThreshold ?? 1)));
+  if (kc && keyThr < 1) {
+    const kn = parseInt(kc[1], 16), kr = (kn >> 16) & 255, kg = (kn >> 8) & 255, kb = kn & 255;
+    for (let i = 0, j = 0; i < total; i++, j += 4) {
+      if (!masc[i]) continue;
+      const dr = data[j] - kr, dg = data[j + 1] - kg, db = data[j + 2] - kb;
+      if (Math.sqrt(dr * dr + dg * dg + db * db) / 441.673 > keyThr) masc[i] = 0;
+    }
+  }
+  if (saida) saida.masc = masc;   // Debug Mask desenha exatamente esta máscara
   /* componentes conexos (duas passagens com union-find) */
   const rot = new Int32Array(total).fill(-1);
   const pai = [];
@@ -12461,7 +12610,15 @@ function blobAnalisar(data, w, h, o) {
 }
 /* IDs estáveis: casa cada blob novo com o anterior mais próximo (e de
    tamanho parecido); quem não casa ganha ID novo; quem some, some. */
-function blobAtribuirIds(anteriores, blobs, proxId, w, h) {
+/* Random Palette: cor determinística por ID e Palette Set (mesma ID =
+   mesma cor, sempre; trocar o Set desloca a paleta inteira). */
+const BLOB_PALETAS = [[0, 47, 85, 65], [160, 32, 80, 60], [280, 53, 75, 70], [30, 41, 90, 55]];
+function blobPaleta(id, set) {
+  const s = BLOB_PALETAS[Math.abs(Math.round(Number(set || 0))) % BLOB_PALETAS.length];
+  const hue = (((s[0] + (Number(set || 0) * 23) + id * s[1]) % 360) + 360) % 360;
+  return 'hsl(' + hue + ',' + s[2] + '%,' + s[3] + '%)';
+}
+function blobAtribuirIds(anteriores, blobs, proxId, w, h, persist) {
   const teto = 0.22 * Math.hypot(w || 100, h || 100);   // distância máxima p/ ser "o mesmo" blob
   const pares = [];
   (blobs || []).forEach((b, bi) => (anteriores || []).forEach((a, ai) => {
@@ -12470,7 +12627,7 @@ function blobAtribuirIds(anteriores, blobs, proxId, w, h) {
   }));
   pares.sort((x, y) => x[0] - y[0]);
   const usadoB = new Set(), usadoA = new Set();
-  const saida = (blobs || []).map(b => ({ ...b, id: 0 }));
+  const saida = (blobs || []).map(b => ({ ...b, id: 0, miss: 0, alpha: 1, ghost: false }));
   for (const [custo, bi, ai] of pares) {
     if (usadoB.has(bi) || usadoA.has(ai)) continue;
     if (custo > teto) continue;
@@ -12478,6 +12635,17 @@ function blobAtribuirIds(anteriores, blobs, proxId, w, h) {
     usadoB.add(bi); usadoA.add(ai);
   }
   for (const b of saida) if (!b.id) b.id = proxId++;
+  /* Persistence (1.7.0): trilhas não pareadas sobrevivem por até
+     round(p/(1-p)) quadros (0,93 ≈ 13), desvanecendo — nunca para sempre. */
+  const pers = Math.min(1, Math.max(0, Number(persist || 0)));
+  if (pers > 0 && (anteriores || []).length) {
+    const maxMiss = pers >= 1 ? 24 : Math.min(24, Math.round(pers / (1 - pers)));
+    (anteriores || []).forEach((a, ai) => {
+      if (usadoA.has(ai)) return;
+      const miss = (a.miss || 0) + 1;
+      if (miss <= maxMiss) saida.push({ ...a, miss, ghost: true, alpha: 1 - miss / (maxMiss + 1) });
+    });
+  }
   return { blobs: saida, proxId };
 }
 /* BLOB_PURO_FIM */
@@ -12495,20 +12663,45 @@ function fxBlobTrack(srcCanvas, W, H, p, runtime) {
   let dados;
   try { dados = mg.getImageData(0, 0, aw, ah).data; } catch (_) { return cv; }
   const rt = runtime || (runtime = {});
-  const achados = blobAnalisar(dados, aw, ah, p);
-  const comIds = blobAtribuirIds(rt._blobPrev || [], achados, rt._blobProx || 1, aw, ah);
+  const saida = {};
+  const achados = blobAnalisar(dados, aw, ah, p, saida);
+  /* Debug Mask: devolve a máscara EXATA da detecção (branco = detectado).
+     Desligar o Debug Mask volta ao resultado normal. */
+  if (p.debugMask === 'yes' && saida.masc) {
+    const mc = fx7NewCanvas(aw, ah), mx = mc.getContext('2d');
+    const im = mx.createImageData(aw, ah);
+    for (let i = 0, j = 0; i < saida.masc.length; i++, j += 4) {
+      const v = saida.masc[i] ? 255 : 0;
+      im.data[j] = v; im.data[j + 1] = v; im.data[j + 2] = v; im.data[j + 3] = 255;
+    }
+    mx.putImageData(im, 0, 0);
+    const out = fx7NewCanvas(W, H), og2 = out.getContext('2d');
+    og2.fillStyle = '#000000'; og2.fillRect(0, 0, W, H);
+    og2.imageSmoothingEnabled = false;
+    og2.drawImage(mc, 0, 0, W, H);
+    return out;
+  }
+  const comIds = blobAtribuirIds(rt._blobPrev || [], achados, rt._blobProx || 1, aw, ah, Number(p.persistence ?? 0));
   rt._blobPrev = comIds.blobs; rt._blobProx = comIds.proxId;
   const blobs = comIds.blobs;
   if (!blobs.length) return cv;
+  /* Tudo do overlay nasce num canvas transparente e só no fim é composto
+     sobre a imagem com Blend + Opacity — preview e exportação idênticos. */
+  const ov = fx7NewCanvas(W, H);
+  const g2 = ov.getContext('2d');
   const sx = W / aw, sy = H / ah, k = Math.min(4, Math.max(0.5, W / 640));
+  const paletaOn = p.randomPalette !== 'no';
   const corDoBlob = b => {
+    if (paletaOn) return blobPaleta(b.id, p.paletteSet);
     if (p.colors === 'byId') { const h = (b.id * 47) % 360; return 'hsl(' + h + ',85%,65%)'; }
     if (p.colors === 'bySize') { const t = Math.min(1, b.frac / Math.max(0.0001, Number(p.maxSize || 0.35))); return 'hsl(' + Math.round(210 - 210 * t) + ',85%,60%)'; }
     return p.color || '#FFFFFF';
   };
-  const caminho = (b, expandir) => {
+  const corCaixa = b => paletaOn ? blobPaleta(b.id, p.paletteSet) : (p.boxColor || '#00E5FF');
+  const alfaB = b => (b.alpha === undefined ? 1 : b.alpha);
+  const caminho = (b, expandir, forcarCaixa) => {
     const path = new Path2D();
-    if (p.track === 'boxes' || b.poly.length < 3) {
+    if (forcarCaixa || p.track === 'boxes' || b.poly.length < 3) {
       const padX = (b.x1 - b.x0) * expandir, padY = (b.y1 - b.y0) * expandir;
       path.rect((b.x0 - padX) * sx, (b.y0 - padY) * sy, (b.x1 - b.x0 + 1 + 2 * padX) * sx, (b.y1 - b.y0 + 1 + 2 * padY) * sy);
       return path;
@@ -12533,15 +12726,21 @@ function fxBlobTrack(srcCanvas, W, H, p, runtime) {
     vg.globalAlpha = 1;
     vg.globalCompositeOperation = 'destination-out';
     for (const b of blobs) vg.fill(caminho(b, pad));
-    g.drawImage(veu, 0, 0);
+    g2.drawImage(veu, 0, 0);
   }
   /* Inside: tint ou preenchimento com o Shape Color */
   if (p.inside === 'tint' || p.inside === 'solid') {
-    g.save();
-    g.fillStyle = p.shapeColor || '#FFFFFF';
-    g.globalAlpha = p.inside === 'tint' ? 0.35 : 1;
-    for (const b of blobs) g.fill(caminho(b, pad));
-    g.restore();
+    g2.save();
+    g2.fillStyle = p.shapeColor || '#FFFFFF';
+    for (const b of blobs) { g2.globalAlpha = (p.inside === 'tint' ? 0.35 : 1) * alfaB(b); g2.fill(caminho(b, pad)); }
+    g2.restore();
+  }
+  /* Box Fill: preenchimento por blob na cor da caixa/paleta */
+  const fillOp = Number(p.boxFillOpacity ?? 0);
+  if (fillOp > 0.001 && p.track !== 'points') {
+    g2.save();
+    for (const b of blobs) { g2.globalAlpha = fillOp * alfaB(b); g2.fillStyle = corCaixa(b); g2.fill(caminho(b, pad, p.boxType === 'box')); }
+    g2.restore();
   }
   /* Connections */
   if (p.connections === 'yes' && blobs.length > 1) {
@@ -12565,76 +12764,118 @@ function fxBlobTrack(srcCanvas, W, H, p, runtime) {
       for (let i = 0; i < centros.length; i++) for (let j = i + 1; j < centros.length; j++) liga(i, j);
     }
     const vistos = new Set();
-    g.save();
-    g.strokeStyle = p.lineColor || '#FFFFFF';
-    g.fillStyle = p.arrowColor || '#FFFFFF';
-    g.globalAlpha = Number(p.lineOpacity ?? 0.6);
-    g.lineWidth = Math.max(0.5, Number(p.lineWidth || 1.5) * k * 0.8);
-    if (p.line === 'dashed') g.setLineDash([6 * k, 4 * k]);
-    else if (p.line === 'dotted') { g.setLineDash([0.1, 5 * k]); g.lineCap = 'round'; }
+    g2.save();
+    g2.strokeStyle = p.lineColor || '#FFFFFF';
+    g2.fillStyle = p.arrowColor || '#FFFFFF';
+    g2.lineWidth = Math.max(0.5, Number(p.lineWidth || 1.5) * k * 0.8);
+    if (p.line === 'dashed') g2.setLineDash([6 * k, 4 * k]);
+    else if (p.line === 'dotted') { g2.setLineDash([0.1, 5 * k]); g2.lineCap = 'round'; }
     for (const [i, j] of pares) {
       const chave = i + '-' + j;
       if (vistos.has(chave)) continue;
       vistos.add(chave);
+      g2.globalAlpha = Number(p.lineOpacity ?? 0.6) * Math.min(alfaB(blobs[i]), alfaB(blobs[j]));
       const [x1, y1] = centros[i], [x2, y2] = centros[j];
-      g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke();
+      g2.beginPath(); g2.moveTo(x1, y1); g2.lineTo(x2, y2); g2.stroke();
       const ang = Math.atan2(y2 - y1, x2 - x1), t = 5 * k + 3;
-      g.beginPath();
-      g.moveTo(x2, y2);
-      g.lineTo(x2 - t * Math.cos(ang - 0.42), y2 - t * Math.sin(ang - 0.42));
-      g.lineTo(x2 - t * Math.cos(ang + 0.42), y2 - t * Math.sin(ang + 0.42));
-      g.closePath(); g.fill();
+      g2.beginPath();
+      g2.moveTo(x2, y2);
+      g2.lineTo(x2 - t * Math.cos(ang - 0.42), y2 - t * Math.sin(ang - 0.42));
+      g2.lineTo(x2 - t * Math.cos(ang + 0.42), y2 - t * Math.sin(ang + 0.42));
+      g2.closePath(); g2.fill();
     }
-    g.restore();
-    g.save();
-    g.fillStyle = p.junctionColor || '#FFFFFF';
-    for (const [x, y] of centros) { g.beginPath(); g.arc(x, y, Math.max(1.5, Number(p.lineWidth || 1.5) * k), 0, 6.2832); g.fill(); }
-    g.restore();
+    g2.restore();
+    g2.save();
+    g2.fillStyle = p.junctionColor || '#FFFFFF';
+    centros.forEach(([x, y], i) => { g2.globalAlpha = alfaB(blobs[i]); g2.beginPath(); g2.arc(x, y, Math.max(1.5, Number(p.lineWidth || 1.5) * k), 0, 6.2832); g2.fill(); });
+    g2.restore();
   }
-  /* Shapes + Center Mark */
-  g.save();
-  g.lineWidth = Math.max(0.25, Number(p.lineWidth || 1.5) * k);
-  g.strokeStyle = p.shapeColor || '#FFFFFF';
+  /* Shapes + caixas (Box Type / Box Blend / espessura / opacidades) */
+  const boxBlendOp = { default: 'source-over', multiply: 'multiply', screen: 'screen', overlay: 'overlay' }[p.boxBlend || 'default'] || 'source-over';
+  g2.save();
+  g2.globalCompositeOperation = boxBlendOp;
   for (const b of blobs) {
-    if (p.track === 'points') break;
-    g.strokeStyle = corDoBlob(b);
-    g.stroke(caminho(b, pad));
-  }
-  if (p.centerMark !== 'none' || p.track === 'points') {
-    for (const b of blobs) {
-      const x = b.cx * sx, y = b.cy * sy, r = Math.max(2, 3 * k);
-      g.strokeStyle = corDoBlob(b); g.fillStyle = corDoBlob(b);
-      if (p.centerMark === 'cross' && p.track !== 'points') {
-        g.beginPath(); g.moveTo(x - r, y); g.lineTo(x + r, y); g.moveTo(x, y - r); g.lineTo(x, y + r); g.stroke();
-      } else { g.beginPath(); g.arc(x, y, r * 0.7, 0, 6.2832); g.fill(); }
+    const aB = alfaB(b);
+    if (p.boxType === 'corners') {
+      const padX = (b.x1 - b.x0) * pad, padY = (b.y1 - b.y0) * pad;
+      const rx = (b.x0 - padX) * sx, ry = (b.y0 - padY) * sy;
+      const rw = (b.x1 - b.x0 + 1 + 2 * padX) * sx, rh = (b.y1 - b.y0 + 1 + 2 * padY) * sy;
+      const lx = Math.max(3, rw * 0.26), ly = Math.max(3, rh * 0.26);
+      g2.strokeStyle = corCaixa(b);
+      g2.globalAlpha = Number(p.boxOutlineOpacity ?? 1) * aB;
+      g2.lineWidth = Math.max(0.25, Number(p.boxThickness ?? 1.5) * k);
+      g2.beginPath();
+      for (const [cx0, cy0, dx, dy] of [[rx, ry, 1, 1], [rx + rw, ry, -1, 1], [rx, ry + rh, 1, -1], [rx + rw, ry + rh, -1, -1]]) {
+        g2.moveTo(cx0 + dx * lx, cy0); g2.lineTo(cx0, cy0); g2.lineTo(cx0, cy0 + dy * ly);
+      }
+      g2.stroke();
+    } else if (p.boxType === 'box' || (p.boxType !== 'none' && p.track === 'boxes')) {
+      g2.strokeStyle = corCaixa(b);
+      g2.globalAlpha = Number(p.boxOutlineOpacity ?? 1) * aB;
+      g2.lineWidth = Math.max(0.25, Number(p.boxThickness ?? 1.5) * k);
+      g2.stroke(caminho(b, pad, true));
+    } else if (p.boxType !== 'none' && p.track !== 'points') {
+      g2.strokeStyle = corDoBlob(b);
+      g2.globalAlpha = aB;
+      g2.lineWidth = Math.max(0.25, Number(p.lineWidth || 1.5) * k);
+      g2.stroke(caminho(b, pad));
     }
   }
-  g.restore();
-  /* Labels */
+  g2.restore();
+  /* Center Mark: Center Type + Center Size (Points sempre marca o centro) */
+  const cTipo = p.centerType || 'none';
+  if (cTipo !== 'none' || p.track === 'points') {
+    g2.save();
+    for (const b of blobs) {
+      const x = b.cx * sx, y = b.cy * sy;
+      const meio = Math.max(1.2, Number(p.centerSize ?? 3) * k / 2);
+      g2.globalAlpha = alfaB(b);
+      g2.strokeStyle = corDoBlob(b); g2.fillStyle = corDoBlob(b);
+      g2.lineWidth = Math.max(0.75, 1.2 * k);
+      const tipo = p.track === 'points' ? 'dot' : cTipo;
+      if (tipo === 'cross') {
+        g2.beginPath(); g2.moveTo(x - meio * 1.6, y); g2.lineTo(x + meio * 1.6, y); g2.moveTo(x, y - meio * 1.6); g2.lineTo(x, y + meio * 1.6); g2.stroke();
+      } else if (tipo === 'ring') {
+        g2.beginPath(); g2.arc(x, y, meio, 0, 6.2832); g2.stroke();
+      } else if (tipo === 'diamond') {
+        g2.beginPath(); g2.moveTo(x, y - meio); g2.lineTo(x + meio, y); g2.lineTo(x, y + meio); g2.lineTo(x - meio, y); g2.closePath(); g2.stroke();
+      } else { g2.beginPath(); g2.arc(x, y, meio * 0.7, 0, 6.2832); g2.fill(); }
+    }
+    g2.restore();
+  }
+  /* Labels / Captions */
   if (p.labels === 'yes') {
-    g.save();
-    g.font = '600 ' + Math.max(6, Number(p.textSize || 12) * k) + 'px system-ui, sans-serif';
-    g.textBaseline = 'middle';
+    g2.save();
+    g2.font = '600 ' + Math.max(6, Number(p.captionSize ?? p.textSize ?? 22) * k) + 'px system-ui, sans-serif';
+    g2.textBaseline = 'middle';
+    const posCap = p.captionPosition || p.placement || 'above';
     for (const b of blobs) {
       const texto = p.text === 'size' ? (b.frac * 100).toFixed(1) + '%'
         : p.text === 'idSize' ? '#' + b.id + ' · ' + (b.frac * 100).toFixed(1) + '%'
         : '#' + b.id;
       const cx = b.cx * sx;
-      const ty = p.placement === 'below' ? (b.y1 + 1) * sy + 8 * k
-        : p.placement === 'center' ? b.cy * sy
+      const ty = posCap === 'below' ? (b.y1 + 1) * sy + 8 * k
+        : posCap === 'center' ? b.cy * sy
         : b.y0 * sy - 8 * k;
-      const largura = g.measureText(texto).width;
+      const largura = g2.measureText(texto).width;
       if (p.tagBg === 'yes') {
-        g.fillStyle = p.bgColor || '#000000';
-        g.globalAlpha = 0.78;
-        g.fillRect(cx - largura / 2 - 4 * k, ty - 8 * k, largura + 8 * k, 16 * k);
-        g.globalAlpha = 1;
+        g2.fillStyle = p.bgColor || '#000000';
+        g2.globalAlpha = Number(p.captionBgOpacity ?? 0.45) * alfaB(b);
+        g2.fillRect(cx - largura / 2 - 4 * k, ty - 8 * k, largura + 8 * k, 16 * k);
       }
-      g.fillStyle = p.labelColor || '#FFFFFF';
-      g.fillText(texto, cx - largura / 2, ty);
+      g2.globalAlpha = alfaB(b);
+      g2.fillStyle = p.labelColor || '#FFFFFF';
+      g2.fillText(texto, cx - largura / 2, ty);
     }
-    g.restore();
+    g2.restore();
   }
+  /* Composição final: Blend + Opacity do overlay sobre a imagem */
+  const blendOp = { normal: 'source-over', multiply: 'multiply', screen: 'screen', overlay: 'overlay', darken: 'darken', lighten: 'lighten' }[p.blendMode || 'normal'] || 'source-over';
+  g.save();
+  g.globalCompositeOperation = blendOp;
+  g.globalAlpha = Math.min(1, Math.max(0, Number(p.opacity ?? 100) / 100));
+  g.drawImage(ov, 0, 0);
+  g.restore();
   return cv;
 }
 
@@ -25433,7 +25674,7 @@ const RUN = {
     if (!a) return null;
     const src = fx7FastRes(a);
     const e = acquire(src.w, src.h);
-    fx5PixelSort(src, { direction: n.params.direction || 'rows', mode: 'bright', threshold: n.params.threshold ?? 128, sortKey: 'brightness', order: n.params.order || 'desc' }, e);
+    fx5PixelSort(src, n.params, e);
     if (src !== a && src.pooled) src.pooled.busy = false;
     return mkRes(e);
   },
@@ -25594,6 +25835,8 @@ function createNode(type, x, y, opts = {}) {
   if (type === 'ascii' && opts.params && !('asciiBackground' in opts.params)) n.params.asciiBackground = 'transparent';
   if (type === 'fractureEffect' && opts.params && !('fractureEngine' in opts.params)) n.params.fractureEngine = 'classic';
   if (type === 'crtScreen' && (!n.params.crtOff || typeof n.params.crtOff !== 'object' || Array.isArray(n.params.crtOff))) n.params.crtOff = {};   // sem flags (projeto antigo) = todos os parâmetros ligados
+  if ((type === 'pixelSort' || type === 'sortedEffect') && opts.params) psMigrarLegado(n.params, opts.params);   // 1.7.0: mode/threshold antigos viram Span Mode + faixa
+  if (type === 'blobTracker' && opts.params) blobMigrarLegado(n.params, opts.params);   // 1.7.0: textSize/placement/centerMark antigos migram; visual antigo preservado
   if (type === 'transform' && opts.params && !('unit' in opts.params)) n.params.unit = 'pct';   // old project: X/Y were in %
   if (type === 'fill' && opts.params && !('gX1' in opts.params)) fillMigraLegado(n);   // old Fill: centred line from the angle
   if (type === 'halfmode' && !/^(custom|p\d+)$/.test(String(n.params.theme))) n.params.theme = 'custom';
@@ -28100,6 +28343,42 @@ function blurAplicaVis(raiz, params) {
 }
 
 /* Glow (Lightroom-style): Direction só aparece em Motion e Streak */
+const PSORT_KEYS = new Set(PSORT_PARAMS.filter(d => d.key).map(d => d.key));
+function psAplicaVis(raiz, params) {
+  if (!raiz || !raiz.querySelectorAll) return;
+  const o = psNorm(params);
+  const vis = new Set(['preset', 'direction', 'sortKey', 'order', 'spanMode', 'skipSpans', 'seed', 'seedDice', 'maxRun', 'mixSrc']);
+  if (o.direction === 'angle') vis.add('angleDeg');
+  if (o.direction === 'radial' || o.direction === 'circular') { vis.add('centerX'); vis.add('centerY'); }
+  if (o.spanMode === 'band') { vis.add('brightLow'); vis.add('brightHigh'); }
+  if (o.spanMode === 'random') { vis.add('randMin'); vis.add('randMax'); }
+  if (o.spanMode === 'edges') vis.add('edgeThr');
+  raiz.querySelectorAll('[data-pkey]').forEach(el => { if (PSORT_KEYS.has(el.dataset.pkey)) el.style.display = vis.has(el.dataset.pkey) ? '' : 'none'; });
+}
+/* Migrações de compatibilidade (projetos salvos antes da 1.7.0): chamadas em
+   createNode DEPOIS do Object.assign dos parâmetros salvos. */
+function psMigrarLegado(params, salvo) {
+  if (!salvo) return;
+  if (salvo.direction === 'rows') params.direction = 'horizontal';
+  if (salvo.direction === 'columns') params.direction = 'vertical';
+  if (salvo.sortKey === 'brightness') params.sortKey = 'luminance';
+  if (!('spanMode' in salvo)) {
+    const thr = Math.min(1, Math.max(0, Number(salvo.threshold ?? 120) / 255));
+    if (salvo.mode === 'all') params.spanMode = 'whole';
+    else if (salvo.mode === 'dark') { params.spanMode = 'band'; params.brightLow = 0; params.brightHigh = thr; }
+    else { params.spanMode = 'band'; params.brightLow = thr; params.brightHigh = 1; }
+  }
+}
+function blobMigrarLegado(params, salvo) {
+  if (!salvo) return;
+  if (!('captionSize' in salvo) && 'textSize' in salvo) params.captionSize = Number(salvo.textSize) || 22;
+  if (!('centerType' in salvo) && 'centerMark' in salvo) params.centerType = salvo.centerMark;
+  if (!('captionPosition' in salvo) && 'placement' in salvo) params.captionPosition = salvo.placement;
+  if (!('randomPalette' in salvo)) params.randomPalette = 'no';   // projeto antigo mantém a aparência de cor única
+  if (!('keyThreshold' in salvo)) params.keyThreshold = 1;          // máscara por cor neutra (detecção idêntica à antiga)
+  if (!('persistence' in salvo)) params.persistence = 0;            // sem fantasmas em projeto antigo
+  if (!('boxFillOpacity' in salvo)) params.boxFillOpacity = 0;      // sem preenchimento novo em projeto antigo
+}
 function glowAplicaVis(raiz, params) {
   if (!raiz || !raiz.querySelectorAll) return;
   const vis = glowKeysVisiveis(params);
@@ -28221,6 +28500,7 @@ function buildControls(n, body) {
   }
   if (n.type === 'blurStudio') blurAplicaVis(body, n.params);
   if (n.type === 'glowEffect') glowAplicaVis(body, n.params);
+  if (n.type === 'pixelSort' || n.type === 'sortedEffect') psAplicaVis(body, n.params);
   if (n.type === 'bandMachine') bandAplicaVis(body, n.params);
   if (n.type === 'halfmode') halfModeAplicaVis(body, n.params);
 }
@@ -28386,12 +28666,13 @@ function makeEnum(n, p) {
     if (n.type === 'blurStudio' && p.key === 'blurMode' && n.el) blurAplicaVis(n.el, n.params);
     if (n.type === 'blurStudio' && p.key === 'blurMode') fbOnModeChange(n);
     if (n.type === 'glowEffect' && p.key === 'style' && n.el) glowAplicaVis(n.el, n.params);
+    if ((n.type === 'pixelSort' || n.type === 'sortedEffect') && n.el) psAplicaVis(n.el, n.params);
     if (n.type === 'blurStudio' && p.key === 'fieldRadius') fbSliderChanged(n);
     markDirty(n.id);
     requestRender();
     commit();
   });
-  n.ui[p.key] = () => { sel.value = String(n.params[p.key]); if (n.type === 'glassStudio' && (p.key === 'glassMode' || p.key === 'glassScope') && n.el) glassAplicaVis(n.el, n.params, n); if (n.type === 'blurStudio' && p.key === 'blurMode' && n.el) blurAplicaVis(n.el, n.params); if (n.type === 'glowEffect' && p.key === 'style' && n.el) glowAplicaVis(n.el, n.params); if (n.type === 'halfmode' && n.el) halfModeAplicaVis(n.el, n.params); };
+  n.ui[p.key] = () => { sel.value = String(n.params[p.key]); if ((n.type === 'pixelSort' || n.type === 'sortedEffect') && n.el) psAplicaVis(n.el, n.params); if (n.type === 'glassStudio' && (p.key === 'glassMode' || p.key === 'glassScope') && n.el) glassAplicaVis(n.el, n.params, n); if (n.type === 'blurStudio' && p.key === 'blurMode' && n.el) blurAplicaVis(n.el, n.params); if (n.type === 'glowEffect' && p.key === 'style' && n.el) glowAplicaVis(n.el, n.params); if (n.type === 'halfmode' && n.el) halfModeAplicaVis(n.el, n.params); };
   row.append(lb, sel);
   return row;
 }
