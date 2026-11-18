@@ -32,7 +32,7 @@ ok(/ENUM\('blend', 'Leak blend', \[\['screen', 'Screen'\], \['add', 'Add'\], \['
 ok(/NUM\('centerX', 'Center X'/.test(def) && /NUM\('centerY', 'Center Y'/.test(def), 'posição do núcleo ajustável');
 
 /* ---------- shader ---------- */
-const sh = recorta('  spinFocusFx: `', '  /* Spin Blur (standalone)');
+const sh = recorta('  spinFocusFx: `', '  /* Fill gradient');
 ok(/smoothstep\(uCore, uCore \+ uCoreSoft, r\)/.test(sh), 'rampa: zero no núcleo → máximo na borda', 'ramp');
 ok(/float ang = uSweep \* \(t - 0\.5\) \* ramp;/.test(sh), 'giro proporcional à rampa (spin tangencial)');
 ok(/for \(int i = 0; i < 64; i\+\+\) \{\s*if \(i >= uCount\) break;/.test(sh), 'amostras controladas por uCount (limite 64)');
