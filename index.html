@@ -487,7 +487,7 @@ html, body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent}/* 1
 
 /* Versão do editor — o arquivo VERSION na raiz é a fonte da verdade
    (o build do APK usa o mesmo número no versionName e falha se divergir). */
-const APP_VERSION = '1.10.0';
+const APP_VERSION = '1.11.0';
 /* tooltip do botão da marca: só o nome do produto (a versão é metadado, não entra na marca) */
 {
   const marca = document.getElementById('brandBtn');
@@ -2392,10 +2392,6 @@ const NODE_TYPES = {
     title: 'Invert', cat: 'color', inputs: ['Image'],
     params: [NUM('amount', 'Amount', 0, 100, 100)],
   },
-  blur: {
-    title: 'Blur', cat: 'filter', inputs: ['Image'],
-    params: [NUM('radius', 'Radius', 0, 60, 8, 0.1), NUM('passes', 'Passes', 1, 4, 2)],
-  },
   grain: {
     title: 'Grain', cat: 'filter', inputs: ['Image'],
     params: [NUM('amount', 'Amount', 0, 100, 22), NUM('size', 'Size', 1, 12, 1),
@@ -2758,14 +2754,6 @@ const NODE_TYPES = {
     title: 'Filter (kernel)', cat: 'filter', inputs: ['Image'],
     params: [ENUM('kind', 'Type', KERNELS, 'soften'), NUM('amount', 'Amount', 0, 100, 100)],
   },
-  directionalBlur: {
-    title: 'Directional blur', cat: 'filter', inputs: ['Image'],
-    params: [NUM('angle', 'Angle', -180, 180, 0), NUM('distance', 'Distance (px)', 0, 200, 20)],
-  },
-  radialBlur: {
-    title: 'Radial blur', cat: 'filter', inputs: ['Image'],
-    params: [NUM('centerX', 'Center X', 0, 100, 50), NUM('centerY', 'Center Y', 0, 100, 50), NUM('amount', 'Amount', 0, 100, 30)],
-  },
   /* SpinHalftoneFX (3.1.8) — reverse engineering of the Pinterest reference
      "Halftone Spinning Blur Photo Effect": spin blur (integração angular
      with a sharp protected core) + CMYK halftone screen + colour tint
@@ -2776,7 +2764,7 @@ const NODE_TYPES = {
      destroy = releaseNode (textures returned to the pool). Equivalent
      standalone module: effect-giro-halftone/spin-halftone-fx.js */
   spinHalftone: {
-    title: 'Giro Halftone (spin blur)', cat: 'style', inputs: ['Image'],
+    title: 'Giro Halftone (spin)', cat: 'style', inputs: ['Image'],
     kw: 'spin blur spin rotation halftone dots screen pinterest circular motion spinning',
     params: [
       NUM('speed', 'Spin speed (°)', 0, 60, 18, 0.5),
@@ -2794,21 +2782,7 @@ const NODE_TYPES = {
       NUM('vig', 'Vignette', 0, 100, 30),
     ],
   },
-  /* Spin Blur: the same angular spin as Halftone Spin, without the halftone print.
-     Centre, angle, radius and falloff control the spun area. */
-  spinBlur: {
-    title: 'Spin Blur', cat: 'style', inputs: ['Image'],
-    kw: 'spin blur spin rotation angular circular motion radial zoom no halftone',
-    params: [
-      NUM('centerX', 'Center X', 0, 100, 50), NUM('centerY', 'Center Y', 0, 100, 45),
-      NUM('speed', 'Blur angle (°)', 0, 60, 18, 0.5),
-      NUM('radius', 'Radius', 0, 85, 28),
-      NUM('falloff', 'Falloff', 0, 100, 22),
-      NUM('count', 'Blur samples', 4, 48, 24, 1),
-      ENUM('dir', 'Direction', [['1', 'Clockwise'], ['-1', 'Counter-clockwise']], '1'),
-      NUM('intensity', 'Intensity', 0, 100, 100),
-    ],
-  },
+
   /* Editor 3.0 — "Spin Focus Light Leak": núcleo nítido + spin blur crescente
      para as bordas + light leaks quentes de filme (concert / camera rotation). */
   spinFocus: {
@@ -3589,7 +3563,12 @@ const NODE_TYPES = {
   blurStudio: {
     title: 'Blur Studio', cat: 'filter', inputs: ['Image'],
     params: [
-      ENUM('blurMode', 'Blur mode', [['box', 'Box / soft blur'], ['texture', 'Textured blur'], ['motion', 'Motion blur'], ['depth', 'Depth blur'], ['dof', 'Depth of field'], ['focusFrame', 'Field blur (multi-pin)']], 'box'),
+      ENUM('blurMode', 'Type', [['gaussian', 'Gaussian'], ['box', 'Box'], ['motion', 'Motion'], ['radial', 'Radial / Zoom'], ['spin', 'Spin / Rotational'], ['lens', 'Lens / Bokeh'], ['surface', 'Surface / Smart'], ['directional', 'Directional'], ['texture', 'Textured blur'], ['depth', 'Depth blur'], ['dof', 'Depth of field'], ['focusFrame', 'Field blur (multi-pin)']], 'box'),
+      NUM('bsAmount', 'Amount / Radius', 0, 100, 40), NUM('bsAngle', 'Angle / Direction', -180, 180, 0, 0.5),
+      NUM('bsCenterX', 'Center X', 0, 100, 50), NUM('bsCenterY', 'Center Y', 0, 100, 50),
+      ENUM('bsQuality', 'Quality / Samples', [['low', 'Low'], ['medium', 'Medium'], ['high', 'High']], 'medium'),
+      ENUM('bsPreserveEdges', 'Preserve Edges', [['on', 'On'], ['off', 'Off']], 'on'),
+      ENUM('bsSpinDir', 'Spin Direction', [['cw', 'Clockwise'], ['ccw', 'Counter-clockwise']], 'cw'),
       NUM('radius', 'Radius (box)', 0, 40, 8), NUM('passes', 'Passes (box)', 1, 4, 2),
       NUM('mix', 'Blend', 0, 100, 100),
       NUM('textureAmount', 'Blur amount (texture)', 0, 32, 8), NUM('texture', 'Grain (texture)', 0, 80, 20),
@@ -3773,22 +3752,14 @@ const NODE_TYPES = {
     ],
   },
   kineticMotion: {
-    title: 'Kinetic motion', cat: 'transform', inputs: ['Image'],
+    title: 'Kinect Motion', cat: 'transform', inputs: ['Image'],
+    kw: 'kinect motion long exposure ghost echo multiple exposure streaks light trails analog film chromatic fringing',
     params: [
-      ENUM('smearMode', 'Drag mode', [['radial', 'Radial (from focus outward)'], ['directional', 'Directional drag'], ['swirl', 'Orbit / swirl']], 'radial'),
-      NUM('smearAmount', 'Drag amount', 0, 100, 45), NUM('smearAngle', 'Angle (directional)', 0, 360, 24),
-      NUM('focalX', 'Focus X (%)', 0, 100, 50), NUM('focalY', 'Focus Y (%)', 0, 100, 40),
-      NUM('focalRadius', 'Sharp area', 0, 80, 24), NUM('focalFeather', 'Area smoothing', 2, 60, 22),
-      NUM('smearJitter', 'Brushstroke variation', 0, 100, 55),
-      NUM('trailAmount', 'Trail amount', 0, 100, 55), NUM('trailThreshold', 'Trail threshold', 80, 250, 185),
-      NUM('trailLength', 'Trail length', 0, 100, 38), NUM('trailDash', 'Broken trails', 0, 100, 45),
-      NUM('beamAmount', 'Beam amount', 0, 100, 55), NUM('beamAngle', 'Beam angle', 0, 180, 62),
-      NUM('beamPos', 'Beam position', 0, 100, 38), NUM('beamWidth', 'Beam width', 1, 40, 11),
-      NUM('beamGlow', 'Beam glow', 0, 100, 60), COL('beamColor', 'Beam color', '#b9a8ff'),
-      NUM('blackCrush', 'Shadow darkening', 0, 100, 35), NUM('shadowTintAmount', 'Shadow tint', 0, 100, 35),
-      COL('shadowTintColor', 'Tint color', '#1a1033'), NUM('bloom', 'Bloom / halation', 0, 100, 35),
-      NUM('vignette', 'Vignette', 0, 100, 30), NUM('grainAmount', 'Film grain', 0, 60, 18),
-      NUM('mix', 'Blend', 0, 100, 100), NUM('seed', 'Seed', 0, 99, 7),
+      NUM('amount', 'Amount / Intensity', 0, 100, 55), NUM('angle', 'Angle / Direction', -180, 180, 0, 0.5),
+      NUM('sharpCenter', 'Sharp Center', 0, 100, 65),
+      NUM('centerX', 'Center X', 0, 100, 50), NUM('centerY', 'Center Y', 0, 100, 50),
+      NUM('ghosts', 'Ghosts / Echo', 0, 5, 3, 1),
+      NUM('ghostDistance', 'Ghost Distance', 0, 100, 35), NUM('ghostFade', 'Ghost Fade', 0, 100, 70),
     ],
   },
   sortedEffect: {
@@ -3992,10 +3963,7 @@ const NODE_TYPES = {
     title: 'Switch', cat: 'compose', inputs: ['False', 'True'],
     params: [ENUM('switch', 'Use input', [['no', 'False (input 1)'], ['yes', 'True (input 2)']], 'no')],
   },
-  blDefocus: {
-    title: 'Lens blur', cat: 'filter', inputs: ['Image'],
-    params: [NUM('radius', 'Radius', 0, 30, 6, 0.5)],
-  },
+
   blRotate: {
     title: 'Rotate', cat: 'transform', inputs: ['Image'],
     params: [NUM('angle', 'Angle', -180, 180, 0)],
@@ -4061,10 +4029,7 @@ const NODE_TYPES = {
     title: 'Map UV', cat: 'transform', inputs: ['Image', 'UV'],
     params: [NUM('strength', 'Intensity', 0, 1, 1, 0.01)],
   },
-  blVectorBlur: {
-    title: 'Vector blur', cat: 'filter', inputs: ['Image'],
-    params: [NUM('angle', 'Angle (°)', 0, 360, 0, 1), NUM('length', 'Length', 0, 100, 20), NUM('samples', 'Samples', 2, 32, 12)],
-  },
+
   blInpaint: {
     title: 'Inpaint', cat: 'filter', inputs: ['Image'],
     params: [NUM('iterations', 'Iterations', 1, 32, 8)],
@@ -4072,10 +4037,6 @@ const NODE_TYPES = {
   blMovieDistortion: {
     title: 'Lens distortion (film)', cat: 'lens', inputs: ['Image'],
     params: [ENUM('mode', 'Mode', [['distort', 'Distort'], ['undistort', 'Remove distortion']], 'distort'), NUM('k', 'Coefficient', -0.5, 0.5, 0.1, 0.01)],
-  },
-  blBokeh: {
-    title: 'Bokeh blur (disc)', cat: 'filter', inputs: ['Image'],
-    params: [NUM('radius', 'Radius', 0, 10, 4, 0.5)],
   },
   contour: {
     title: 'Contours (contour)', cat: 'style', inputs: ['Image'],
@@ -4195,7 +4156,7 @@ const NODE_TYPES = {
     ],
   },
   photoScanSmudge: {
-    title: 'Blurred copy / scan (photoscan)', cat: 'style', inputs: ['Image'],
+    title: 'Smudged copy / scan (photoscan)', cat: 'style', inputs: ['Image'],
     params: [
       ENUM('mode', 'Mode', [['smudged', 'Blurred photocopy'], ['photoscan', 'Color photoscan'], ['xerox', 'High-contrast xerox']], 'smudged'),
       ENUM('direction', 'Blur direction', [['horizontal', 'Horizontal'], ['vertical', 'Vertical'], ['diagonal', 'Diagonal']], 'horizontal'),
@@ -6143,32 +6104,6 @@ void main(){
   outColor = vec4(clamp(mix(s.rgb, r, uAmt), 0.0, 1.0), s.a);
 }`,
 
-  directional: `
-uniform sampler2D uSrc;
-uniform vec2 uStep;
-void main(){
-  vec4 acc = vec4(0.0);
-  for (int i = -8; i <= 8; i++) {
-    float t = float(i) / 8.0;
-    acc += texture(uSrc, vUv + uStep * t * 0.5);
-  }
-  outColor = acc / 17.0;
-}`,
-
-  radial: `
-uniform sampler2D uSrc;
-uniform vec2 uCenter;
-uniform float uAmt;
-void main(){
-  vec2 d = vUv - uCenter;
-  vec4 acc = vec4(0.0);
-  for (int i = 0; i < 16; i++) {
-    float s = 1.0 - uAmt * float(i) / 15.0;
-    acc += texture(uSrc, uCenter + d * s);
-  }
-  outColor = acc / 16.0;
-}`,
-
   /* SpinHalftoneFX · pass 1 — spin blur: integration along the arc
      θ(t) = varredura · (t − ½) · proteção(r). O núcleo (r < uCore) fica
      sharp; the trail grows with the radius — same as the masked Radial Blur "Spin"
@@ -6272,14 +6207,6 @@ void main(){
 
   outc *= 1.0 - uVig * smoothstep(0.35, 1.05, r) * (0.55 + 0.45 * ramp);
   outColor = vec4(clamp(outc, 0.0, 1.0), 1.0);
-}`,
-
-  /* Spin Blur (standalone) · mixes the spin with the original by intensity. No screen. */
-  spinMixFx: `
-uniform sampler2D uSpin, uOrig;
-uniform float uMix;
-void main(){
-  outColor = mix(texture(uOrig, vUv), texture(uSpin, vUv), uMix);
 }`,
 
   /* Fill gradient · start/end points in canvas space (uA, uB as 0..1 fractions, y down).
@@ -9482,11 +9409,13 @@ function runImage(n) {
   return { tex: n.runtime.tex, fbo: null, w, h, pooled: null };
 }
 
+/* 1.11.0: o Type Gaussian do Blur Studio reutiliza o passe gaussiano GPU
+   pré-multiplicado do antigo nó Blur (sigma efetivo = sigma*sqrt(passes)). */
 function runBlur(n, [a]) {
   if (!a) return null;
-  const sigma = n.params.radius, passes = n.params.passes | 0;
+  const passes = n.params.bsQuality === 'low' ? 1 : n.params.bsQuality === 'high' ? 3 : 2;
+  const sigma = (Number(n.params.bsAmount) || 0) / 100 * 30;
   if (sigma < 0.05 || passes < 1) return ptRes(a);
-  // N passes of a Gaussian with sigma are equivalent to one with sigma*sqrt(N) (variances add up)
   return gaussianBlurRes(a, sigma * Math.sqrt(passes));
 }
 
@@ -14023,7 +13952,7 @@ function fx13Glass(srcCanvas, W, H, params) {
 }
 
 /* fx14 */
-const FX14_BLUR_DEFAULTS = { blurMode: 'box', radius: 8, passes: 2, mix: 100, textureAmount: 8, texture: 20, motionAmount: 24, motionAngle: 0, motionSamples: 12, depthMap: 'luma', invert: 'no', depthFocus: 50, depthRange: 28, maxBlur: 18, dofFocusY: 50, dofRange: 28, dofBlur: 12, focusX: 50, focusY: 50, focusRadius: 34, focusBlur: 10, focusVignette: 45, focusShape: 'circle' };
+const FX14_BLUR_DEFAULTS = { blurMode: 'box', bsAmount: 40, bsAngle: 0, bsCenterX: 50, bsCenterY: 50, bsQuality: 'medium', bsPreserveEdges: 'on', bsSpinDir: 'cw', radius: 8, passes: 2, mix: 100, textureAmount: 8, texture: 20, motionAmount: 24, motionAngle: 0, motionSamples: 12, depthMap: 'luma', invert: 'no', depthFocus: 50, depthRange: 28, maxBlur: 18, dofFocusY: 50, dofRange: 28, dofBlur: 12, focusX: 50, focusY: 50, focusRadius: 34, focusBlur: 10, focusVignette: 45, focusShape: 'circle' };
 // ===== v14: Blur Studio (fxBlurStudio from v1.6) =====
 function fx14Copy(srcCanvas, W, H) {
   const cv = fx7NewCanvas(W, H);
@@ -14184,6 +14113,128 @@ function fx14DOF(srcCanvas, W, H, p) {
 }
 // Moldura de foco (fxFocusFrame)
 // Blur Studio dispatcher
+/* BLUR_CENTRAL_INI — 1.11.0: função ÚNICA de blur. Todos os tipos do Blur
+   Studio passam por aqui, reutilizando os motores dos nós antigos já
+   removidos (fx14BlurredCanvas/fx14Box/fx14Motion/fx32VectorBlur/
+   fx32Bokeh) sem duplicar código. Tipos antigos -> mapa de migração. */
+const BLUR_MIGRACAO = { blur: 'gaussian', directionalBlur: 'directional', radialBlur: 'radial', spinBlur: 'spin', blDefocus: 'lens', blBokeh: 'lens', blVectorBlur: 'directional' };
+function blurQualitySamples(q) { return q === 'low' ? 8 : q === 'high' ? 24 : 16; }
+function blurParamsLegado(tipo, s) {
+  s = s || {};
+  const num = (v, d) => { const n = Number(v); return isFinite(n) ? n : d; };
+  const clamp100 = v => Math.min(100, Math.max(0, v));
+  switch (tipo) {
+    case 'blur': return { blurMode: 'gaussian', bsAmount: clamp100(num(s.radius, 8) / 60 * 100), bsQuality: num(s.passes, 2) >= 3 ? 'high' : num(s.passes, 2) === 2 ? 'medium' : 'low' };
+    case 'directionalBlur': return { blurMode: 'directional', bsAmount: clamp100(num(s.distance, 20) / 200 * 100), bsAngle: num(s.angle, 0) };
+    case 'radialBlur': return { blurMode: 'radial', bsAmount: clamp100(num(s.amount, 30)), bsCenterX: num(s.centerX, 50), bsCenterY: num(s.centerY, 50) };
+    case 'spinBlur': return { blurMode: 'spin', bsAmount: clamp100(num(s.speed, 18) / 60 * 100), bsCenterX: num(s.centerX, 50), bsCenterY: num(s.centerY, 50), bsSpinDir: String(s.dir) === '-1' ? 'ccw' : 'cw', bsQuality: num(s.count, 24) >= 32 ? 'high' : num(s.count, 24) >= 16 ? 'medium' : 'low' };
+    case 'blDefocus': return { blurMode: 'lens', bsAmount: clamp100(num(s.radius, 6) / 30 * 100) };
+    case 'blBokeh': return { blurMode: 'lens', bsAmount: clamp100(num(s.radius, 4) / 10 * 100) };
+    case 'blVectorBlur': return { blurMode: 'directional', bsAmount: clamp100(num(s.length, 20)), bsAngle: ((num(s.angle, 0) + 180) % 360 + 360) % 360 - 180, bsQuality: num(s.samples, 12) >= 24 ? 'high' : num(s.samples, 12) >= 12 ? 'medium' : 'low' };
+    default: return { blurMode: 'box' };
+  }
+}
+/* Acumula cópias transformadas com falloff 1/(i+1) (mesmo padrão do
+   fx14Motion): drawFn(ctx, t) desenha a origem com a transformada de t. */
+function blurAcumula(srcCanvas, W, H, samples, drawFn) {
+  const cv = fx7NewCanvas(W, H), ctx = cv.getContext('2d');
+  for (let i = 0; i < samples; i++) {
+    ctx.globalAlpha = 1 / (i + 1);
+    ctx.save();
+    drawFn(ctx, samples === 1 ? 0 : i / (samples - 1));
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+  return cv;
+}
+function blurCentral(srcCanvas, W, H, o) {
+  const amt = Math.min(100, Math.max(0, Number(o.amount) || 0)) / 100;
+  if (amt <= 0) return fx14Copy(srcCanvas, W, H);
+  const samples = blurQualitySamples(o.quality);
+  const cx = (Number(o.centerX) || 0) / 100 * W, cy = (Number(o.centerY) || 0) / 100 * H;
+  switch (o.type) {
+    case 'gaussian': {
+      let out = fx14BlurredCanvas(srcCanvas, W, H, amt * 40);
+      if (o.quality === 'high') out = fx14BlurredCanvas(out, W, H, amt * 20);
+      return out;
+    }
+    case 'box': return fx14Box(srcCanvas, W, H, { radius: amt * 40, passes: o.quality === 'low' ? 1 : o.quality === 'high' ? 3 : 2, mix: 100 });
+    case 'motion': return fx14Motion(srcCanvas, W, H, { amount: amt * 120, angle: Number(o.angle) || 0, samples });
+    case 'directional': return fx32VectorBlur(srcCanvas, W, H, { angle: Number(o.angle) || 0, length: amt * 100, samples });
+    case 'radial': {
+      const zoom = amt * 0.55, twist = (Number(o.angle) || 0) * Math.PI / 180 * 0.12;
+      return blurAcumula(srcCanvas, W, H, samples, (ctx, t) => {
+        const s = 1 + zoom * t, a = twist * t;
+        ctx.translate(cx, cy); ctx.rotate(a); ctx.scale(s, s); ctx.translate(-cx, -cy);
+        ctx.drawImage(srcCanvas, 0, 0);
+      });
+    }
+    case 'spin': {
+      const sweep = amt * 60 * Math.PI / 180 * (o.spinDir === 'ccw' ? -1 : 1);
+      return blurAcumula(srcCanvas, W, H, samples, (ctx, t) => {
+        ctx.translate(cx, cy); ctx.rotate(sweep * (t - 0.5)); ctx.translate(-cx, -cy);
+        ctx.drawImage(srcCanvas, 0, 0);
+      });
+    }
+    case 'lens': {
+      /* Bokeh de disco (fx32Bokeh, raio <= 10) em meia resolução quando
+         grande; foco nítido no Center, blur cresce com a distância. */
+      const base = fx31Defocus(srcCanvas, W, H, { radius: amt * 4 });   // defocus ótico do antigo Lens blur sob o disco
+      const useHalf = Math.max(W, H) > 640;
+      const k = useHalf ? 0.5 : 1, sw = Math.max(1, Math.round(W * k)), sh = Math.max(1, Math.round(H * k));
+      let small = base;
+      if (useHalf) { small = fx7NewCanvas(sw, sh); small.getContext('2d').drawImage(base, 0, 0, sw, sh); }
+      const disc = fx32Bokeh(small, sw, sh, { radius: Math.max(1, Math.round(amt * 10)) });
+      const blurred = fx7NewCanvas(W, H), bctx = blurred.getContext('2d');
+      bctx.imageSmoothingEnabled = true; bctx.drawImage(disc, 0, 0, W, H);
+      const sharp = srcCanvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, W, H).data;
+      const bd = bctx.getImageData(0, 0, W, H).data;
+      const cv = fx7NewCanvas(W, H), ctx = cv.getContext('2d');
+      const out = ctx.createImageData(W, H), od = out.data;
+      const maxD = Math.max(1, Math.hypot(Math.max(cx, W - cx), Math.max(cy, H - cy)));
+      for (let y = 0; y < H; y++) {
+        let i = y * W * 4;
+        for (let x = 0; x < W; x++, i += 4) {
+          let m = Math.hypot(x - cx, y - cy) / maxD;
+          m = m < 0.12 ? 0 : m > 0.75 ? 1 : (m - 0.12) / 0.63;
+          m = m * m * (3 - 2 * m);
+          od[i] = sharp[i] + (bd[i] - sharp[i]) * m;
+          od[i + 1] = sharp[i + 1] + (bd[i + 1] - sharp[i + 1]) * m;
+          od[i + 2] = sharp[i + 2] + (bd[i + 2] - sharp[i + 2]) * m;
+          od[i + 3] = sharp[i + 3];
+        }
+      }
+      ctx.putImageData(out, 0, 0);
+      return cv;
+    }
+    case 'surface': {
+      /* Surface/Smart: blur suave que respeita bordas fortes (diferença
+         de luminância entre nítido e borrado derruba a mistura). */
+      const blurred = fx14BlurredCanvas(srcCanvas, W, H, amt * 24);
+      const sharp = srcCanvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, W, H).data;
+      const bd = blurred.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, W, H).data;
+      const cv = fx7NewCanvas(W, H), ctx = cv.getContext('2d');
+      const out = ctx.createImageData(W, H), od = out.data;
+      const preserve = o.preserveEdges !== 'off';
+      for (let i = 0; i < od.length; i += 4) {
+        let m = 1;
+        if (preserve) {
+          const d = Math.abs((sharp[i] * 0.2126 + sharp[i + 1] * 0.7152 + sharp[i + 2] * 0.0722) - (bd[i] * 0.2126 + bd[i + 1] * 0.7152 + bd[i + 2] * 0.0722)) / 255;
+          m = Math.min(1, Math.max(0, 1 - d / 0.16));
+          m = m * m;
+        }
+        od[i] = sharp[i] + (bd[i] - sharp[i]) * m;
+        od[i + 1] = sharp[i + 1] + (bd[i + 1] - sharp[i + 1]) * m;
+        od[i + 2] = sharp[i + 2] + (bd[i + 2] - sharp[i + 2]) * m;
+        od[i + 3] = sharp[i + 3];
+      }
+      ctx.putImageData(out, 0, 0);
+      return cv;
+    }
+    default: return fx14Box(srcCanvas, W, H, { radius: amt * 40, passes: 2, mix: 100 });
+  }
+}
+/* BLUR_CENTRAL_FIM */
 function fx14BlurStudio(srcCanvas, W, H, params) {
   const p = { ...FX14_BLUR_DEFAULTS, ...(params || {}) };
   const mode = p.blurMode || 'box';
@@ -14191,6 +14242,10 @@ function fx14BlurStudio(srcCanvas, W, H, params) {
   if (mode === 'motion') return fx14Motion(srcCanvas, W, H, { amount: p.motionAmount, angle: p.motionAngle, samples: p.motionSamples });
   if (mode === 'depth') return fx14Depth(srcCanvas, W, H, { map: p.depthMap, invert: p.invert, focus: p.depthFocus, range: p.depthRange, maxBlur: p.maxBlur, mix: p.mix });
   if (mode === 'dof') return fx14DOF(srcCanvas, W, H, { focusY: p.dofFocusY, range: p.dofRange, blur: p.dofBlur });
+  if (mode === 'gaussian' || mode === 'directional' || mode === 'radial' || mode === 'spin' || mode === 'lens' || mode === 'surface') {
+    return blurCentral(srcCanvas, W, H, { type: mode, amount: p.bsAmount, angle: p.bsAngle, centerX: p.bsCenterX, centerY: p.bsCenterY, quality: p.bsQuality, preserveEdges: p.bsPreserveEdges, spinDir: p.bsSpinDir });
+  }
+  if (mode === 'box' && Number(p.bsAmount) !== 40) return blurCentral(srcCanvas, W, H, { type: 'box', amount: p.bsAmount, quality: p.bsQuality });
   return fx14Box(srcCanvas, W, H, { radius: p.radius, passes: p.passes, mix: p.mix });
 }
 
@@ -14780,166 +14835,121 @@ function fx22Reshaper(srcCanvas, W, H, p) {
 
 /* fx23 */
 // ===== v23: Kinetic Motion (fxKineticMotion from v1.6) =====
-const FX23_DEFAULTS = { kineticMotion: { smearMode: 'radial', smearAmount: 45, smearAngle: 24, focalX: 50, focalY: 40, focalRadius: 24, focalFeather: 22, smearJitter: 55, trailAmount: 55, trailThreshold: 185, trailLength: 38, trailDash: 45, beamAmount: 55, beamAngle: 62, beamPos: 38, beamWidth: 11, beamGlow: 60, beamColor: '#b9a8ff', blackCrush: 35, shadowTintAmount: 35, shadowTintColor: '#1a1033', bloom: 35, vignette: 30, grainAmount: 18, mix: 100, seed: 7 } };
-function fx23Kinetic(srcCanvas, W, H, p) {
-  const minDim = Math.min(W, H);
-  const mode = p.smearMode || 'radial';
-  const smearAmt = Number(p.smearAmount ?? 45) / 100;
-  const angleRad = Number(p.smearAngle ?? 24) * Math.PI / 180;
-  const fx0 = Number(p.focalX ?? 50) / 100 * W;
-  const fy0 = Number(p.focalY ?? 40) / 100 * H;
-  const focalR = Number(p.focalRadius ?? 24) / 100 * minDim;
-  const feather = Math.max(4, Number(p.focalFeather ?? 22) / 100 * minDim);
-  const jitter = clamp01(Number(p.smearJitter ?? 55) / 100);
-  const trailAmt = Number(p.trailAmount ?? 55) / 100;
-  const trailThr = Number(p.trailThreshold ?? 185);
-  const trailLen = Number(p.trailLength ?? 38) / 100 * minDim * 0.6;
-  const trailDash = clamp01(Number(p.trailDash ?? 45) / 100);
-  const beamAmt = Number(p.beamAmount ?? 55) / 100;
-  const beamAngle = Number(p.beamAngle ?? 62) * Math.PI / 180;
-  const beamPos = Number(p.beamPos ?? 38) / 100;
-  const beamWidth = Math.max(1, Number(p.beamWidth ?? 11) / 100 * minDim);
-  const beamGlow = clamp01(Number(p.beamGlow ?? 60) / 100);
-  const beamC = fx17Hex(p.beamColor || '#b9a8ff');
-  const crush = clamp01(Number(p.blackCrush ?? 35) / 100);
-  const shadowTintA = clamp01(Number(p.shadowTintAmount ?? 35) / 100);
-  const shadowC = fx17Hex(p.shadowTintColor || '#1a1033');
-  const bloom = clamp01(Number(p.bloom ?? 35) / 100);
-  const vig = clamp01(Number(p.vignette ?? 30) / 100);
-  const grain = Number(p.grainAmount ?? 18) / 100;
-  const mix = clamp01(Number(p.mix ?? 100) / 100);
-  const seed = Number(p.seed || 0);
+const FX23_DEFAULTS = { kineticMotion: { amount: 55, angle: 0, sharpCenter: 65, centerX: 50, centerY: 50, ghosts: 3, ghostDistance: 35, ghostFade: 70 } };
+/* KINETIC_PURO_INI — 1.11.0: Kinect Motion reescrito do zero (o motor
+   antigo foi apagado). Funções puras do pipeline, testáveis sem DOM. */
+function kineticParamsNorm(p) {
+  p = p || {};
+  const num = (v, d) => { const n = Number(v); return isFinite(n) ? n : d; };
+  const ang = num(p.angle, 0) * Math.PI / 180;
+  return {
+    amt: Math.min(100, Math.max(0, num(p.amount, 55))) / 100,
+    dirX: Math.cos(ang), dirY: Math.sin(ang),
+    sharp: Math.min(100, Math.max(0, num(p.sharpCenter, 65))) / 100,
+    cx: Math.min(100, Math.max(0, num(p.centerX, 50))) / 100,
+    cy: Math.min(100, Math.max(0, num(p.centerY, 50))) / 100,
+    ghosts: Math.min(5, Math.max(0, Math.round(num(p.ghosts, 3)))),
+    gDist: Math.min(100, Math.max(0, num(p.ghostDistance, 35))) / 100,
+    fade: Math.min(100, Math.max(0, num(p.ghostFade, 70))) / 100,
+  };
+}
+/* Opacidades dos ghosts: 0.35 / 0.20 / 0.10... (decaimento pelo Fade). */
+function kineticGhostOpacidades(ghosts, fade) {
+  const fator = 1 - Math.min(100, Math.max(0, Number(fade) || 0)) / 100 * 0.65;
+  const ops = [];
+  for (let g = 0; g < ghosts; g++) ops.push(0.35 * Math.pow(fator, g));
+  return ops;
+}
+/* Máscara radial de foco: 0 = centro nítido, 1 = borda totalmente no
+   efeito. Sharp Center 100 -> quase tudo nítido; 0 -> tudo borrado. */
+function kineticMascara(dNorm, sharp01) {
+  const inner = Math.min(1, Math.max(0, sharp01)) * 0.85;
+  let m = (dNorm - inner) / 0.35;
+  m = m < 0 ? 0 : m > 1 ? 1 : m;
+  return m * m * (3 - 2 * m);
+}
+/* KINETIC_PURO_FIM */
 
-  const src = srcCanvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, W, H).data;
-  const cv = fx7NewCanvas(W, H);
-  const ctx = cv.getContext('2d', { willReadFrequently: true });
+/* Kinect Motion (novo): A) máscara radial de foco · B) motion blur
+   direcional <= 16 samples com falloff exponencial a 0.5x · C) ghosts
+   Screen 0.35/0.20/0.10 · D) streak de fundo mais forte · E) fringing
+   cromático R/B opostos · F) composite pelo centro nítido + grain. */
+function fxKinectMotion(srcCanvas, W, H, p) {
+  const q = kineticParamsNorm(p);
+  if (q.amt <= 0 && q.ghosts <= 0) return fx14Copy(srcCanvas, W, H);
+  const k = Math.max(W, H) > 480 ? 0.5 : 1;
+  const sw = Math.max(1, Math.round(W * k)), sh = Math.max(1, Math.round(H * k));
+  const small = fx7NewCanvas(sw, sh), smCtx = small.getContext('2d');
+  smCtx.imageSmoothingEnabled = true;
+  smCtx.drawImage(srcCanvas, 0, 0, sw, sh);
+  const dist = q.amt * Math.min(sw, sh) * 0.45;
+  const motionLayer = (distPx, samples) => {
+    const cv = fx7NewCanvas(sw, sh), ctx = cv.getContext('2d');
+    const S = Math.max(2, Math.min(16, samples));
+    for (let i = 0; i < S; i++) {
+      ctx.globalAlpha = 1 / (i + 1);
+      const t = (i / (S - 1) - 0.5) * distPx;
+      ctx.drawImage(small, q.dirX * t, q.dirY * t);
+    }
+    ctx.globalAlpha = 1;
+    return cv;
+  };
+  const fxLayer = motionLayer(dist, Math.round(6 + q.amt * 10));
+  { /* D: streak de fundo — blur direcional 2.2x, Screen sobre a base */
+    const streak = motionLayer(dist * 2.2, 10);
+    const fxCtx = fxLayer.getContext('2d');
+    fxCtx.globalCompositeOperation = 'screen';
+    fxCtx.globalAlpha = 0.45;
+    fxCtx.drawImage(streak, 0, 0);
+    fxCtx.globalAlpha = 1;
+    fxCtx.globalCompositeOperation = 'source-over';
+  }
+  if (q.ghosts > 0) { /* C: ghosts Screen com offset crescente no Angle */
+    const fxCtx = fxLayer.getContext('2d');
+    const ops = kineticGhostOpacidades(q.ghosts, q.fade * 100);
+    const gMax = q.gDist * Math.min(sw, sh) * 0.6;
+    fxCtx.globalCompositeOperation = 'screen';
+    for (let g = 0; g < ops.length; g++) {
+      fxCtx.globalAlpha = ops[g];
+      const t = gMax * (g + 1) / Math.max(1, q.ghosts);
+      fxCtx.drawImage(small, q.dirX * t, q.dirY * t);
+    }
+    fxCtx.globalAlpha = 1;
+    fxCtx.globalCompositeOperation = 'source-over';
+  }
+  const fxFull = fx7NewCanvas(W, H), fxCtx2 = fxFull.getContext('2d');
+  fxCtx2.imageSmoothingEnabled = true;
+  fxCtx2.drawImage(fxLayer, 0, 0, W, H);
+  /* F + E: composite pela máscara, fringing R/B e grain de filme */
+  const sharp = srcCanvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, W, H).data;
+  const fd = fxCtx2.getImageData(0, 0, W, H).data;
+  const cv = fx7NewCanvas(W, H), ctx = cv.getContext('2d');
   const out = ctx.createImageData(W, H), od = out.data;
-  const maxLen = smearAmt * minDim * 0.5;
-  const cosA = Math.cos(angleRad), sinA = Math.sin(angleRad);
-  const cosB = Math.cos(beamAngle), sinB = Math.sin(beamAngle);
-  const bpx = beamPos * W, bpy = 0;
-  const beamCore = 2 * Math.pow(beamWidth * 0.35, 2);
-  const beamHalo = 2 * Math.pow(beamWidth * (1 + beamGlow * 3), 2);
-
-  for (let y = 0; y < H; y += 1) {
-    for (let x = 0; x < W; x += 1) {
-      const i = (y * W + x) * 4;
-      const dx = x - fx0, dy = y - fy0;
-      const dist = Math.hypot(dx, dy);
-      const w = clamp01((dist - focalR) / feather);
-      let dirX, dirY;
-      if (mode === 'directional') { dirX = cosA; dirY = sinA; }
-      else {
-        const dl = dist || 1;
-        dirX = dx / dl; dirY = dy / dl;
-        if (mode === 'swirl') { const t = dirX; dirX = -dirY; dirY = t; }
-      }
-      const stripe = mode === 'directional'
-        ? Math.floor((-x * sinA + y * cosA) / 3)
-        : Math.floor(Math.atan2(dy, dx) * 114.59);
-      const lenMul = Math.max(0, 1 + jitter * 1.5 * (fx6Hash(stripe * 7 + seed * 13, seed * 29 - stripe) - 0.5));
-      const len = maxLen * w * lenMul;
-      let r, g, b;
-      if (len < 0.75) {
-        r = src[i]; g = src[i + 1]; b = src[i + 2];
-      } else {
-        const steps = Math.min(20, Math.max(4, Math.round(len / 3)));
-        let ar = 0, ag = 0, ab = 0, aw = 0;
-        for (let s = 0; s <= steps; s += 1) {
-          const t = s / steps;
-          const wgt = 1 - t * 0.82;
-          const sx = x - dirX * len * t, sy = y - dirY * len * t;
-          ar += fx13SampleLin(src, sx, sy, 0, W, H) * wgt;
-          ag += fx13SampleLin(src, sx, sy, 1, W, H) * wgt;
-          ab += fx13SampleLin(src, sx, sy, 2, W, H) * wgt;
-          aw += wgt;
-        }
-        r = ar / aw; g = ag / aw; b = ab / aw;
-      }
-      // trilhas de luz quebradas
-      if (trailAmt > 0.003 && trailLen > 1) {
-        const tSteps = 14;
-        const stepLen = trailLen * (0.35 + 0.65 * w) / tSteps;
-        let tr = 0, tg = 0, tb = 0;
-        for (let s = 1; s <= tSteps; s += 1) {
-          const dashSeg = Math.floor(s * 0.5);
-          if (trailDash > 0.003 && fx6Hash(stripe * 31 + dashSeg * 17 + seed * 7, dashSeg * 23 - stripe) < trailDash * 0.8) continue;
-          const jx = (fx6Hash(stripe + seed, s * 3 + 1) - 0.5) * 2.4;
-          const jy = (fx6Hash(stripe - seed, s * 5 + 2) - 0.5) * 2.4;
-          const si = fx7Idx(x + dirX * stepLen * s + jx, y + dirY * stepLen * s + jy, W, H);
-          const lum = src[si] * 0.299 + src[si + 1] * 0.587 + src[si + 2] * 0.114;
-          if (lum > trailThr) {
-            const k = (lum - trailThr) / (256 - trailThr) * (1 - (s / tSteps) * 0.8);
-            tr += src[si] * k; tg += src[si + 1] * k; tb += src[si + 2] * k;
-          }
-        }
-        const tk = trailAmt * 0.35;
-        r += tr * tk; g += tg * tk; b += tb * tk;
-      }
-      // black crush preserving colour
-      let lum01 = (r * 0.299 + g * 0.587 + b * 0.114) / 255;
-      if (crush > 0.003 && lum01 > 0.0001) {
-        const cf = Math.pow(lum01, 1 + crush * 1.6) / lum01;
-        r *= cf; g *= cf; b *= cf;
-        lum01 = (r * 0.299 + g * 0.587 + b * 0.114) / 255;
-      }
-      // shadow tint
-      if (shadowTintA > 0.003) {
-        const sw = Math.pow(1 - clamp01(lum01), 2) * shadowTintA;
-        r = fx9Mix(r, shadowC.r * (0.4 + lum01 * 1.4), sw);
-        g = fx9Mix(g, shadowC.g * (0.4 + lum01 * 1.4), sw);
-        b = fx9Mix(b, shadowC.b * (0.4 + lum01 * 1.4), sw);
-      }
-      // feixe de luz volumétrico
-      if (beamAmt > 0.003) {
-        const dn = -(x - bpx) * sinB + (y - bpy) * cosB;
-        const beamI = beamAmt * (Math.exp(-(dn * dn) / beamCore) * 0.9 + Math.exp(-(dn * dn) / beamHalo) * (0.22 + beamGlow * 0.32));
-        r += beamC.r * beamI; g += beamC.g * beamI; b += beamC.b * beamI;
-      }
-      // vinheta
-      if (vig > 0.003) {
-        const vx = (x / W - 0.5) * 2, vy = (y / H - 0.5) * 2;
-        const vm = 1 - vig * Math.pow(clamp01(Math.hypot(vx, vy) - 0.25), 1.8) * 1.15;
-        r *= vm; g *= vm; b *= vm;
-      }
-      // grão de filme
-      if (grain > 0.003) {
-        const gn = (fx6Hash(x + seed * 53, y - seed * 59) - 0.5) * grain * 48;
-        r += gn; g += gn; b += gn;
-      }
-      od[i] = clamp(fx9Mix(src[i], r, mix), 0, 255);
-      od[i + 1] = clamp(fx9Mix(src[i + 1], g, mix), 0, 255);
-      od[i + 2] = clamp(fx9Mix(src[i + 2], b, mix), 0, 255);
-      od[i + 3] = src[i + 3];
+  const cxp = q.cx * W, cyp = q.cy * H;
+  const normX = Math.max(1, W * 0.62), normY = Math.max(1, H * 0.62);
+  const fringe = (1 + 2 * q.amt);
+  const fRx = Math.round(q.dirX * fringe), fRy = Math.round(q.dirY * fringe);
+  const clampI = (v, m) => v < 0 ? 0 : v > m ? m : v;
+  for (let y = 0; y < H; y++) {
+    let i = y * W * 4;
+    for (let x = 0; x < W; x++, i += 4) {
+      const d = Math.hypot((x - cxp) / normX, (y - cyp) / normY);
+      const m = kineticMascara(d, q.sharp);
+      if (m <= 0) { od[i] = sharp[i]; od[i + 1] = sharp[i + 1]; od[i + 2] = sharp[i + 2]; od[i + 3] = sharp[i + 3]; continue; }
+      const jR = (clampI(y + fRy, H - 1) * W + clampI(x + fRx, W - 1)) * 4;
+      const jB = (clampI(y - fRy, H - 1) * W + clampI(x - fRx, W - 1)) * 4;
+      const vig = 1 - 0.18 * m;
+      const gr = (fx6Hash(x, y) - 0.5) * 11 * (0.35 + 0.65 * m);
+      od[i] = (sharp[i] + (fd[jR] - sharp[i]) * m) * vig + gr;
+      od[i + 1] = (sharp[i + 1] + (fd[i + 1] - sharp[i + 1]) * m) * vig + gr;
+      od[i + 2] = (sharp[i + 2] + (fd[jB + 2] - sharp[i + 2]) * m) * vig + gr;
+      od[i + 3] = sharp[i + 3];
     }
   }
   ctx.putImageData(out, 0, 0);
-
-  // bloom / halation: bright-pass borrado somado por cima
-  if (bloom > 0.01) {
-    const bpC = fx7NewCanvas(W, H), bpCtx = bpC.getContext('2d');
-    const bp = bpCtx.createImageData(W, H), bd = bp.data;
-    for (let k = 0; k < od.length; k += 4) {
-      bd[k] = clamp((od[k] - 165) * 1.9, 0, 255);
-      bd[k + 1] = clamp((od[k + 1] - 165) * 1.9, 0, 255);
-      bd[k + 2] = clamp((od[k + 2] - 165) * 1.9, 0, 255);
-      bd[k + 3] = 255;
-    }
-    bpCtx.putImageData(bp, 0, 0);
-    const blurC = fx7NewCanvas(W, H), blurCtx = blurC.getContext('2d');
-    blurCtx.filter = `blur(${Math.max(3, minDim * 0.014)}px)`;
-    blurCtx.drawImage(bpC, 0, 0);
-    blurCtx.filter = 'none';
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.globalAlpha = bloom * 0.75 * mix;
-    ctx.drawImage(blurC, 0, 0);
-    ctx.globalAlpha = 1;
-    ctx.globalCompositeOperation = 'source-over';
-  }
   return cv;
 }
 
-/* fx24 */
 function fx24CellAverage(data, W, H, x, y, cell) {
   let r = 0, g = 0, b = 0, a = 0, count = 0;
   const maxX = Math.min(W, x + cell), maxY = Math.min(H, y + cell);
@@ -15993,7 +16003,6 @@ const FX31_DEFAULTS = {
   blDistanceKey: { keyColor: '#00ff00', tolerance: 0.2, falloff: 0.1 },
   blDilateErode: { distance: 2 },
   blBilateral: { radius: 3, sigmaColor: 30 },
-  blDefocus: { radius: 6 },
   blRotate: { angle: 0 },
   blScale: { percent: 100 },
   blTranslate: { x: 0, y: 0 },
@@ -16163,10 +16172,8 @@ const FX32_DEFAULTS = {
   blChannelKey: { channel: 'lum', low: 0.2, high: 0.8, invert: 'no' },
   blCornerPin: { x1: 0, y1: 0, x2: 100, y2: 0, x3: 100, y3: 100, x4: 0, y4: 100 },
   blMapUV: { strength: 1 },
-  blVectorBlur: { angle: 0, length: 20, samples: 12 },
   blInpaint: { iterations: 8 },
   blMovieDistortion: { mode: 'distort', k: 0.1 },
-  blBokeh: { radius: 4 },
 };
 // Straight (non-premultiplied) pixels of a canvas, resizing if needed.
 // ===== v40: Compositor, lote B4 (Keying, Tune Image, Anti-Aliasing, Convolve, Despeckle, Mask To SDF) — aproximações próprias baseadas na documentação =====
@@ -23230,7 +23237,7 @@ const WF_T_EXP = [
     liga: [[0, 1], [1, 2], [2, 3], [3, 4]] },
   { id: 'movimento-cinetico', cat: 'exp', nome: 'Kinetic motion',
     desc: 'Kinetic motion + grain + vignette: a speed blur with focus in the center.',
-    nos: [['image', 60, 120], ['kineticMotion', 340, 120, { smearAmount: 60, trailAmount: 40, bloom: 30 }], ['grain', 620, 120, { amount: 12 }], ['vignette', 900, 120, { strength: 38, softness: 60 }], ['output', 1180, 120]],
+    nos: [['image', 60, 120], ['kineticMotion', 340, 120, { amount: 65, angle: 15, ghosts: 4, ghostDistance: 45 }], ['grain', 620, 120, { amount: 12 }], ['vignette', 900, 120, { strength: 38, softness: 60 }], ['output', 1180, 120]],
     liga: [[0, 1], [1, 2], [2, 3], [3, 4]] },
   { id: 'campo-de-curvas', cat: 'exp', nome: 'Curve field',
     desc: 'Curve field + grain: the lines flowing through the image like drawn water.',
@@ -24930,7 +24937,6 @@ const RUN = {
   duotone: (n, [a]) => { const p = n.params; return pointOp(a, 'duotone', { uShadow: hexRGB(p.shadow), uHighlight: hexRGB(p.highlight), uK: p.intensity / 100 }); },
   threshold: (n, [a]) => { const p = n.params; return pointOp(a, 'threshold', { uThreshold: p.threshold, uSoftness: p.softness, uLow: hexRGB(p.low), uHigh: hexRGB(p.high) }); },
   invert: (n, [a]) => pointOp(a, 'invert', { uAmount: n.params.amount / 100 }),
-  blur: (n, ins) => runBlur(n, ins),
   grain: (n, [a]) => { const p = n.params; return pointOp(a, 'grain', { uAmount: p.amount, uSize: p.size, uSeed: p.seed, uMode: p.mode === 'rgb' ? 1 : 0 }); },
   sharpen: (n, ins) => runSharpen(n, ins),
   mix: (n, ins) => runMixBl(n, ins),
@@ -25185,16 +25191,6 @@ const RUN = {
     });
     return mkRes(e);
   },
-  directionalBlur: (n, [a]) => {
-    if (!a) return null;
-    const p = n.params, th = p.angle * Math.PI / 180;
-    return pointOp(a, 'directional', { uStep: [Math.cos(th) * p.distance / a.w, Math.sin(th) * p.distance / a.h] });
-  },
-  radialBlur: (n, [a]) => {
-    if (!a) return null;
-    const p = n.params;
-    return pointOp(a, 'radial', { uCenter: [p.centerX / 100, 1 - p.centerY / 100], uAmt: p.amount / 100 });
-  },
   /* SpinHalftoneFX: passe 1 gira (spin blur), passe 2 imprime a
      retícula e compõe. Ver def em NODE_TYPES e análise em
      efeito-giro-halftone/ANALISE.md */
@@ -25217,23 +25213,6 @@ const RUN = {
       uGrain: Number(p.grain) / 100, uVig: Number(p.vig) / 100, uAspect: a.w / a.h,
     });
     tmp.busy = false;
-    return mkRes(e);
-  },
-  spinBlur: (n, [a]) => {
-    if (!a) return null;
-    const p = n.params;
-    const spin = acquire(a.w, a.h);
-    draw('spinBlurFx', spin, { uSrc: a.tex }, {
-      uCenter: [Number(p.centerX) / 100, 1 - Number(p.centerY) / 100],
-      uSweep: Number(p.speed) * Math.PI / 180 * (p.dir === '-1' ? -1 : 1),
-      uCount: Math.max(1, Math.round(Number(p.count) || 24)),
-      uCore: (Number(p.radius) / 100) * 0.72,
-      uCoreSoft: Math.max(0.0005, (Number(p.falloff) / 100) * 0.5),
-      uAspect: a.w / a.h,
-    });
-    const e = acquire(a.w, a.h);
-    draw('spinMixFx', e, { uSpin: spin.tex, uOrig: a.tex }, { uMix: Number(p.intensity) / 100 });
-    spin.busy = false;
     return mkRes(e);
   },
   /* Editor 3.0 — Spin Focus Light Leak: um passe (núcleo nítido, spin
@@ -25845,7 +25824,7 @@ const RUN = {
     const g = fx13Glass(s, W, H, driven ? { ...pp, texDriven: true } : pp);
     return b ? fx16GlassTex(g, W, H, pp, fx7SrcCanvas(b)) : g;
   }, n.params, GLASS_PX),
-  blurStudio: (n, [a]) => (n.params.blurMode === 'focusFrame' ? fbRun(n, a) : fxStudioRun(a, fx14BlurStudio, n.params, BLUR_PX)),
+  blurStudio: (n, [a]) => (n.params.blurMode === 'focusFrame' ? fbRun(n, a) : n.params.blurMode === 'gaussian' ? runBlur(n, [a]) : fxStudioRun(a, fx14BlurStudio, n.params, BLUR_PX)),
   mirrorEffect: (n, [a]) => (a ? fx7Canvas(a, (s, W, H) => fx15Mirror(s, W, H, { ...FX15_DEFAULTS, ...n.params })) : null),
   kaleidoscopeEffect: (n, [a]) => (a ? fx7Canvas(a, (s, W, H) => fx15Kaleidoscope(s, W, H, { ...FX15_DEFAULTS, ...n.params })) : null),
   rippleEffect: (n, [a]) => (a ? fx7Canvas(a, (s, W, H) => fx15Ripple(s, W, H, { ...FX15_DEFAULTS, ...n.params })) : null),
@@ -25865,7 +25844,7 @@ const RUN = {
   datamosh: (n, [a]) => (a ? fx7Canvas(a, (s, W, H) => fx20Datamosh(s, W, H, { ...FX20_DEFAULTS.datamosh, ...n.params })) : null),
   slitScan: (n, [a]) => (a ? fx7Canvas(a, (s, W, H) => fx21SlitScan(s, W, H, { ...FX21_DEFAULTS.slitScan, ...n.params })) : null),
   reshaper: (n, [a]) => (a ? fx7Canvas(a, (s, W, H) => fx22Reshaper(s, W, H, { ...FX22_DEFAULTS.reshaper, ...n.params })) : null),
-  kineticMotion: (n, [a]) => (a ? fx7Canvas(a, (s, W, H) => fx23Kinetic(s, W, H, { ...FX23_DEFAULTS.kineticMotion, ...n.params })) : null),
+  kineticMotion: (n, [a]) => (a ? fx7Canvas(a, (s, W, H) => fxKinectMotion(s, W, H, { ...FX23_DEFAULTS.kineticMotion, ...n.params })) : null),
   sortedEffect: (n, [a]) => {
     if (!a) return null;
     const src = fx7FastRes(a);
@@ -25910,7 +25889,6 @@ const RUN = {
   blDistanceKey: (n, [a]) => (a ? fx7Canvas(a, (s, W, H) => fx31DistanceKey(s, W, H, { ...FX31_DEFAULTS.blDistanceKey, ...n.params })) : null),
   blDilateErode: (n, [a]) => (a ? fx7Canvas(a, (s, W, H) => fx31Morph(s, W, H, { ...FX31_DEFAULTS.blDilateErode, ...n.params })) : null),
   blBilateral: (n, [a]) => (a ? fx7Canvas(a, (s, W, H) => fx31Bilateral(s, W, H, { ...FX31_DEFAULTS.blBilateral, ...n.params })) : null),
-  blDefocus: (n, [a]) => (a ? fx7Canvas(a, (s, W, H) => fx31Defocus(s, W, H, { ...FX31_DEFAULTS.blDefocus, ...n.params })) : null),
   blRotate: (n, [a]) => (a ? fx7Canvas(a, (s, W, H) => fx31Rotate(s, W, H, { ...FX31_DEFAULTS.blRotate, ...n.params })) : null),
   blScale: (n, [a]) => (a ? fx7Canvas(a, (s, W, H) => fx31Scale(s, W, H, { ...FX31_DEFAULTS.blScale, ...n.params })) : null),
   blTranslate: (n, [a]) => (a ? fx7Canvas(a, (s, W, H) => fx31Translate(s, W, H, { ...FX31_DEFAULTS.blTranslate, ...n.params })) : null),
@@ -25925,10 +25903,8 @@ const RUN = {
   blChannelKey: (n, [a]) => (a ? fx7Canvas(a, (s, W, H) => fx32ChannelKey(s, W, H, { ...FX32_DEFAULTS.blChannelKey, ...n.params })) : null),
   blCornerPin: (n, [a]) => (a ? fx7Canvas(a, (s, W, H) => fx32CornerPin(s, W, H, { ...FX32_DEFAULTS.blCornerPin, ...n.params })) : null),
   blMapUV: (n, [a, b]) => (a ? fx7Canvas(a, (s, W, H) => fx32MapUV(s, b ? fx7SrcCanvas(b) : null, W, H, { ...FX32_DEFAULTS.blMapUV, ...n.params })) : null),
-  blVectorBlur: (n, [a]) => (a ? fx7Canvas(a, (s, W, H) => fx32VectorBlur(s, W, H, { ...FX32_DEFAULTS.blVectorBlur, ...n.params })) : null),
   blInpaint: (n, [a]) => (a ? fx7Canvas(a, (s, W, H) => fx32Inpaint(s, W, H, { ...FX32_DEFAULTS.blInpaint, ...n.params })) : null),
   blMovieDistortion: (n, [a]) => (a ? fx7Canvas(a, (s, W, H) => fx32Movie(s, W, H, { ...FX32_DEFAULTS.blMovieDistortion, ...n.params })) : null),
-  blBokeh: (n, [a]) => (a ? fx7Canvas(a, (s, W, H) => fx32Bokeh(s, W, H, { ...FX32_DEFAULTS.blBokeh, ...n.params })) : null),
   contour: (n, [a]) => (a ? fx7Canvas(a, (s, W, H) => fx33Contour(s, W, H, { ...FX33_DEFAULTS.contour, ...n.params })) : null),
   stripe: (n, [a]) => (a ? fx7Canvas(a, (s, W, H) => fx33Stripe(s, W, H, { ...FX33_DEFAULTS.stripe, ...n.params })) : null),
   gridSplit: (n, [a]) => (a ? fx7Canvas(a, (s, W, H) => fx33GridSplit(s, W, H, { ...FX33_DEFAULTS.gridSplit, ...n.params })) : null),
@@ -26015,6 +25991,8 @@ function createNode(type, x, y, opts = {}) {
   const oldVandal = type === 'spraydelic';
   if (oldVandal) type = 'vandal';
   if (type === 'halftone') type = 'halfmode';   // 2.9.57: o efeito foi renomeado; o nome antigo continua abrindo
+  const blurTipoAntigo = BLUR_MIGRACAO[type] ? type : null;   // 1.11.0: nós de blur soltos viram Blur Studio
+  if (blurTipoAntigo) type = 'blurStudio';
   const def = NODE_TYPES[type];
   const id = opts.id ?? nextId++;
   if (id >= nextId) nextId = id + 1;
@@ -26024,6 +26002,7 @@ function createNode(type, x, y, opts = {}) {
   n.animOpen = !!opts.animOpen;
   if (type === 'image') n.params.file = 'Pattern (generated)';
   if (opts.params) Object.assign(n.params, opts.params);
+  if (blurTipoAntigo && opts.params) Object.assign(n.params, blurParamsLegado(blurTipoAntigo, opts.params));   // 1.11.0: tipo + parâmetros do nó de blur antigo
   if (type === 'vandal' && !Array.isArray(n.params.vandalMasks)) n.params.vandalMasks=[];
   if (type === 'vandal' && opts.params) for (let i=1;i<=5;i++) if (!('vandalSoft'+i in opts.params)) n.params['vandalSoft'+i] = Number(opts.params.vandalSoft) || 0;
   if (oldVandal && !(opts.params && 'vandalMode' in opts.params)) n.params.vandalMode = 'classic';
@@ -28532,9 +28511,15 @@ function glassAplicaVis(raiz, params, n) {
 /* 2.9.46: Blur Studio same as Glass — only the parameters of the chosen mode
    (map taken from fx14BlurStudio: 'mix' only appears in box/texture/depth) */
 const BLUR_MODOS = {
+  gaussian: ['bsAmount', 'bsQuality'],
   box: ['radius', 'passes', 'mix'],
-  texture: ['textureAmount', 'texture', 'mix'],
   motion: ['motionAmount', 'motionAngle', 'motionSamples'],
+  radial: ['bsAmount', 'bsAngle', 'bsCenterX', 'bsCenterY', 'bsQuality'],
+  spin: ['bsAmount', 'bsCenterX', 'bsCenterY', 'bsSpinDir', 'bsQuality'],
+  lens: ['bsAmount', 'bsCenterX', 'bsCenterY', 'bsQuality'],
+  surface: ['bsAmount', 'bsQuality', 'bsPreserveEdges'],
+  directional: ['bsAmount', 'bsAngle', 'bsQuality'],
+  texture: ['textureAmount', 'texture', 'mix'],
   depth: ['depthMap', 'invert', 'depthFocus', 'depthRange', 'maxBlur', 'mix'],
   dof: ['dofFocusY', 'dofRange', 'dofBlur'],
   focusFrame: ['fieldRadius', 'fieldReach'],
@@ -39706,6 +39691,15 @@ ld');
       var md = document.getElementById('maskDlg');
       if (md && !md.hidden) return true;              /* painting: Finish/Cancel decides */
       if (document.body.classList.contains('view-preview')) return click('mGoGraph');
+      return false;
+    } catch (e) { return false; }
+  };
+})();
+</script>
+
+</body>
+</html>
+ns('view-preview')) return click('mGoGraph');
       return false;
     } catch (e) { return false; }
   };

@@ -105,6 +105,8 @@ jobs:
         run: node tests/glass-star.test.mjs
       - name: Carrossel infinito da comunidade (laço sem vão)
         run: node tests/carousel-loop.test.mjs
+      - name: Blur Studio consolidado + Kinect Motion (migração e pipeline leve)
+        run: node tests/blur-kinetic.test.mjs
       - name: Versão (VERSION = index.html = APK)
         run: node tests/version.test.mjs
       - name: Higiene (código morto, CSS sem uso, reference/ fora)
