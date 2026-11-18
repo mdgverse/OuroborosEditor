@@ -487,7 +487,7 @@ html, body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent}/* 1
 
 /* Versão do editor — o arquivo VERSION na raiz é a fonte da verdade
    (o build do APK usa o mesmo número no versionName e falha se divergir). */
-const APP_VERSION = '1.11.0';
+const APP_VERSION = '1.11.1';
 /* tooltip do botão da marca: só o nome do produto (a versão é metadado, não entra na marca) */
 {
   const marca = document.getElementById('brandBtn');
@@ -3568,8 +3568,19 @@ const NODE_TYPES = {
       NUM('bsCenterX', 'Center X', 0, 100, 50), NUM('bsCenterY', 'Center Y', 0, 100, 50),
       ENUM('bsQuality', 'Quality / Samples', [['low', 'Low'], ['medium', 'Medium'], ['high', 'High']], 'medium'),
       ENUM('bsPreserveEdges', 'Preserve Edges', [['on', 'On'], ['off', 'Off']], 'on'),
-      ENUM('bsSpinDir', 'Spin Direction', [['cw', 'Clockwise'], ['ccw', 'Counter-clockwise']], 'cw'),
-      NUM('radius', 'Radius (box)', 0, 40, 8), NUM('passes', 'Passes (box)', 1, 4, 2),
+      NUM('dirAngle', 'Angle / Direction', -180, 180, 0, 0.5), NUM('dirDistance', 'Distance (px)', 0, 200, 20),
+      NUM('dirSamples', 'Samples', 2, 32, 12),
+      NUM('radAmount', 'Amount', 0, 100, 30),
+      NUM('radCenterX', 'Center X', 0, 100, 50), NUM('radCenterY', 'Center Y', 0, 100, 50),
+      NUM('spinCenterX', 'Center X', 0, 100, 50), NUM('spinCenterY', 'Center Y', 0, 100, 45),
+      NUM('spinSpeed', 'Blur angle (°)', 0, 60, 18, 0.5),
+      NUM('spinRadius', 'Radius', 0, 85, 28),
+      NUM('spinFalloff', 'Falloff', 0, 100, 22),
+      NUM('spinCount', 'Blur samples', 4, 48, 24, 1),
+      ENUM('spinDir', 'Direction', [['1', 'Clockwise'], ['-1', 'Counter-clockwise']], '1'),
+      NUM('spinIntensity', 'Intensity', 0, 100, 100),
+      NUM('lensRadius', 'Lens Radius', 0, 30, 6, 0.5), NUM('bokehRadius', 'Bokeh Radius', 0, 10, 4, 0.5),
+      NUM('radius', 'Radius', 0, 60, 8, 0.1), NUM('passes', 'Passes', 1, 4, 2),
       NUM('mix', 'Blend', 0, 100, 100),
       NUM('textureAmount', 'Blur amount (texture)', 0, 32, 8), NUM('texture', 'Grain (texture)', 0, 80, 20),
       NUM('motionAmount', 'Motion distance', 0, 120, 24), NUM('motionAngle', 'Motion angle', 0, 360, 0),
@@ -6130,6 +6141,14 @@ void main(){
     ws += 1.0;
   }
   outColor = acc / ws;
+}`,
+
+  /* Spin Blur (standalone) · mixes the spin with the original by intensity. No screen. */
+  spinMixFx: `
+uniform sampler2D uSpin, uOrig;
+uniform float uMix;
+void main(){
+  outColor = mix(texture(uOrig, vUv), texture(uSpin, vUv), uMix);
 }`,
 
   /* Spin Focus Light Leak (Editor 3.0) — um passe só:
@@ -9413,10 +9432,30 @@ function runImage(n) {
    pré-multiplicado do antigo nó Blur (sigma efetivo = sigma*sqrt(passes)). */
 function runBlur(n, [a]) {
   if (!a) return null;
-  const passes = n.params.bsQuality === 'low' ? 1 : n.params.bsQuality === 'high' ? 3 : 2;
-  const sigma = (Number(n.params.bsAmount) || 0) / 100 * 30;
+  const sigma = Number(n.params.radius) || 0, passes = Math.round(Number(n.params.passes) || 0);
   if (sigma < 0.05 || passes < 1) return ptRes(a);
+  // N passes of a Gaussian with sigma are equivalent to one with sigma*sqrt(N) (variances add up)
   return gaussianBlurRes(a, sigma * Math.sqrt(passes));
+}
+
+/* 1.11.1: Spin / Rotational restaurado com o motor GPU original do nó
+   Spin Blur (núcleo protegido + falloff + mistura com o original). */
+function runSpinStudio(n, a) {
+  if (!a) return null;
+  const p = n.params;
+  const spin = acquire(a.w, a.h);
+  draw('spinBlurFx', spin, { uSrc: a.tex }, {
+    uCenter: [Number(p.spinCenterX) / 100, 1 - Number(p.spinCenterY) / 100],
+    uSweep: Number(p.spinSpeed) * Math.PI / 180 * (p.spinDir === '-1' ? -1 : 1),
+    uCount: Math.max(1, Math.round(Number(p.spinCount) || 24)),
+    uCore: (Number(p.spinRadius) / 100) * 0.72,
+    uCoreSoft: Math.max(0.0005, (Number(p.spinFalloff) / 100) * 0.5),
+    uAspect: a.w / a.h,
+  });
+  const e = acquire(a.w, a.h);
+  draw('spinMixFx', e, { uSpin: spin.tex, uOrig: a.tex }, { uMix: Number(p.spinIntensity) / 100 });
+  spin.busy = false;
+  return mkRes(e);
 }
 
 function runSharpen(n, [a]) {
@@ -13952,7 +13991,7 @@ function fx13Glass(srcCanvas, W, H, params) {
 }
 
 /* fx14 */
-const FX14_BLUR_DEFAULTS = { blurMode: 'box', bsAmount: 40, bsAngle: 0, bsCenterX: 50, bsCenterY: 50, bsQuality: 'medium', bsPreserveEdges: 'on', bsSpinDir: 'cw', radius: 8, passes: 2, mix: 100, textureAmount: 8, texture: 20, motionAmount: 24, motionAngle: 0, motionSamples: 12, depthMap: 'luma', invert: 'no', depthFocus: 50, depthRange: 28, maxBlur: 18, dofFocusY: 50, dofRange: 28, dofBlur: 12, focusX: 50, focusY: 50, focusRadius: 34, focusBlur: 10, focusVignette: 45, focusShape: 'circle' };
+const FX14_BLUR_DEFAULTS = { blurMode: 'box', bsAmount: 40, bsAngle: 0, bsCenterX: 50, bsCenterY: 50, bsQuality: 'medium', bsPreserveEdges: 'on', dirAngle: 0, dirDistance: 20, dirSamples: 12, radAmount: 30, radCenterX: 50, radCenterY: 50, spinCenterX: 50, spinCenterY: 45, spinSpeed: 18, spinRadius: 28, spinFalloff: 22, spinCount: 24, spinDir: '1', spinIntensity: 100, lensRadius: 6, bokehRadius: 4, radius: 8, passes: 2, mix: 100, textureAmount: 8, texture: 20, motionAmount: 24, motionAngle: 0, motionSamples: 12, depthMap: 'luma', invert: 'no', depthFocus: 50, depthRange: 28, maxBlur: 18, dofFocusY: 50, dofRange: 28, dofBlur: 12, focusX: 50, focusY: 50, focusRadius: 34, focusBlur: 10, focusVignette: 45, focusShape: 'circle' };
 // ===== v14: Blur Studio (fxBlurStudio from v1.6) =====
 function fx14Copy(srcCanvas, W, H) {
   const cv = fx7NewCanvas(W, H);
@@ -14124,13 +14163,13 @@ function blurParamsLegado(tipo, s) {
   const num = (v, d) => { const n = Number(v); return isFinite(n) ? n : d; };
   const clamp100 = v => Math.min(100, Math.max(0, v));
   switch (tipo) {
-    case 'blur': return { blurMode: 'gaussian', bsAmount: clamp100(num(s.radius, 8) / 60 * 100), bsQuality: num(s.passes, 2) >= 3 ? 'high' : num(s.passes, 2) === 2 ? 'medium' : 'low' };
-    case 'directionalBlur': return { blurMode: 'directional', bsAmount: clamp100(num(s.distance, 20) / 200 * 100), bsAngle: num(s.angle, 0) };
-    case 'radialBlur': return { blurMode: 'radial', bsAmount: clamp100(num(s.amount, 30)), bsCenterX: num(s.centerX, 50), bsCenterY: num(s.centerY, 50) };
-    case 'spinBlur': return { blurMode: 'spin', bsAmount: clamp100(num(s.speed, 18) / 60 * 100), bsCenterX: num(s.centerX, 50), bsCenterY: num(s.centerY, 50), bsSpinDir: String(s.dir) === '-1' ? 'ccw' : 'cw', bsQuality: num(s.count, 24) >= 32 ? 'high' : num(s.count, 24) >= 16 ? 'medium' : 'low' };
-    case 'blDefocus': return { blurMode: 'lens', bsAmount: clamp100(num(s.radius, 6) / 30 * 100) };
-    case 'blBokeh': return { blurMode: 'lens', bsAmount: clamp100(num(s.radius, 4) / 10 * 100) };
-    case 'blVectorBlur': return { blurMode: 'directional', bsAmount: clamp100(num(s.length, 20)), bsAngle: ((num(s.angle, 0) + 180) % 360 + 360) % 360 - 180, bsQuality: num(s.samples, 12) >= 24 ? 'high' : num(s.samples, 12) >= 12 ? 'medium' : 'low' };
+    case 'blur': return { blurMode: 'gaussian', radius: num(s.radius, 8), passes: Math.min(4, Math.max(1, Math.round(num(s.passes, 2)))) };
+    case 'directionalBlur': return { blurMode: 'directional', dirAngle: num(s.angle, 0), dirDistance: num(s.distance, 20), dirSamples: 17 };
+    case 'radialBlur': return { blurMode: 'radial', radAmount: clamp100(num(s.amount, 30)), radCenterX: num(s.centerX, 50), radCenterY: num(s.centerY, 50) };
+    case 'spinBlur': return { blurMode: 'spin', spinCenterX: num(s.centerX, 50), spinCenterY: num(s.centerY, 45), spinSpeed: num(s.speed, 18), spinRadius: num(s.radius, 28), spinFalloff: num(s.falloff, 22), spinCount: num(s.count, 24), spinDir: String(s.dir) === '-1' ? '-1' : '1', spinIntensity: num(s.intensity, 100) };
+    case 'blDefocus': return { blurMode: 'lens', lensRadius: num(s.radius, 6), bokehRadius: 0 };
+    case 'blBokeh': return { blurMode: 'lens', lensRadius: 0, bokehRadius: num(s.radius, 4) };
+    case 'blVectorBlur': return { blurMode: 'directional', dirAngle: ((num(s.angle, 0) + 180) % 360 + 360) % 360 - 180, dirDistance: num(s.length, 20), dirSamples: num(s.samples, 12) };
     default: return { blurMode: 'box' };
   }
 }
@@ -14149,7 +14188,6 @@ function blurAcumula(srcCanvas, W, H, samples, drawFn) {
 }
 function blurCentral(srcCanvas, W, H, o) {
   const amt = Math.min(100, Math.max(0, Number(o.amount) || 0)) / 100;
-  if (amt <= 0) return fx14Copy(srcCanvas, W, H);
   const samples = blurQualitySamples(o.quality);
   const cx = (Number(o.centerX) || 0) / 100 * W, cy = (Number(o.centerY) || 0) / 100 * H;
   switch (o.type) {
@@ -14160,7 +14198,7 @@ function blurCentral(srcCanvas, W, H, o) {
     }
     case 'box': return fx14Box(srcCanvas, W, H, { radius: amt * 40, passes: o.quality === 'low' ? 1 : o.quality === 'high' ? 3 : 2, mix: 100 });
     case 'motion': return fx14Motion(srcCanvas, W, H, { amount: amt * 120, angle: Number(o.angle) || 0, samples });
-    case 'directional': return fx32VectorBlur(srcCanvas, W, H, { angle: Number(o.angle) || 0, length: amt * 100, samples });
+    case 'directional': return fx32VectorBlur(srcCanvas, W, H, { angle: Number(o.angle) || 0, length: Number(o.distance) || 0, samples: Math.max(2, Math.round(Number(o.samples) || 12)) });
     case 'radial': {
       const zoom = amt * 0.55, twist = (Number(o.angle) || 0) * Math.PI / 180 * 0.12;
       return blurAcumula(srcCanvas, W, H, samples, (ctx, t) => {
@@ -14177,14 +14215,18 @@ function blurCentral(srcCanvas, W, H, o) {
       });
     }
     case 'lens': {
-      /* Bokeh de disco (fx32Bokeh, raio <= 10) em meia resolução quando
-         grande; foco nítido no Center, blur cresce com a distância. */
-      const base = fx31Defocus(srcCanvas, W, H, { radius: amt * 4 });   // defocus ótico do antigo Lens blur sob o disco
+      /* Lens Radius = defocus do antigo Lens blur (fx31Defocus); Bokeh
+         Radius = disco do antigo Bokeh (fx32Bokeh, raio <= 10, em meia
+         resolução quando grande). Foco nítido no Center, blur cresce
+         com a distância. */
+      const lensR = Math.max(0, Number(o.lensRadius) || 0), bokehR = Math.min(10, Math.max(0, Number(o.bokehRadius) || 0));
+      if (lensR < 0.05 && bokehR <= 0) return fx14Copy(srcCanvas, W, H);
+      const base = fx31Defocus(srcCanvas, W, H, { radius: lensR });
       const useHalf = Math.max(W, H) > 640;
       const k = useHalf ? 0.5 : 1, sw = Math.max(1, Math.round(W * k)), sh = Math.max(1, Math.round(H * k));
       let small = base;
       if (useHalf) { small = fx7NewCanvas(sw, sh); small.getContext('2d').drawImage(base, 0, 0, sw, sh); }
-      const disc = fx32Bokeh(small, sw, sh, { radius: Math.max(1, Math.round(amt * 10)) });
+      const disc = bokehR > 0 ? fx32Bokeh(small, sw, sh, { radius: Math.max(1, Math.round(bokehR)) }) : small;
       const blurred = fx7NewCanvas(W, H), bctx = blurred.getContext('2d');
       bctx.imageSmoothingEnabled = true; bctx.drawImage(disc, 0, 0, W, H);
       const sharp = srcCanvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, W, H).data;
@@ -14242,8 +14284,11 @@ function fx14BlurStudio(srcCanvas, W, H, params) {
   if (mode === 'motion') return fx14Motion(srcCanvas, W, H, { amount: p.motionAmount, angle: p.motionAngle, samples: p.motionSamples });
   if (mode === 'depth') return fx14Depth(srcCanvas, W, H, { map: p.depthMap, invert: p.invert, focus: p.depthFocus, range: p.depthRange, maxBlur: p.maxBlur, mix: p.mix });
   if (mode === 'dof') return fx14DOF(srcCanvas, W, H, { focusY: p.dofFocusY, range: p.dofRange, blur: p.dofBlur });
-  if (mode === 'gaussian' || mode === 'directional' || mode === 'radial' || mode === 'spin' || mode === 'lens' || mode === 'surface') {
-    return blurCentral(srcCanvas, W, H, { type: mode, amount: p.bsAmount, angle: p.bsAngle, centerX: p.bsCenterX, centerY: p.bsCenterY, quality: p.bsQuality, preserveEdges: p.bsPreserveEdges, spinDir: p.bsSpinDir });
+  if (mode === 'directional') return blurCentral(srcCanvas, W, H, { type: mode, angle: p.dirAngle, distance: p.dirDistance, samples: p.dirSamples });
+  if (mode === 'radial') return blurCentral(srcCanvas, W, H, { type: mode, amount: p.radAmount, angle: p.bsAngle, centerX: p.radCenterX, centerY: p.radCenterY, quality: p.bsQuality });
+  if (mode === 'lens') return blurCentral(srcCanvas, W, H, { type: mode, lensRadius: p.lensRadius, bokehRadius: p.bokehRadius, centerX: p.bsCenterX, centerY: p.bsCenterY });
+  if (mode === 'gaussian' || mode === 'spin' || mode === 'surface') {
+    return blurCentral(srcCanvas, W, H, { type: mode, amount: p.bsAmount, angle: p.bsAngle, centerX: p.bsCenterX, centerY: p.bsCenterY, quality: p.bsQuality, preserveEdges: p.bsPreserveEdges });
   }
   if (mode === 'box' && Number(p.bsAmount) !== 40) return blurCentral(srcCanvas, W, H, { type: 'box', amount: p.bsAmount, quality: p.bsQuality });
   return fx14Box(srcCanvas, W, H, { radius: p.radius, passes: p.passes, mix: p.mix });
@@ -25824,7 +25869,7 @@ const RUN = {
     const g = fx13Glass(s, W, H, driven ? { ...pp, texDriven: true } : pp);
     return b ? fx16GlassTex(g, W, H, pp, fx7SrcCanvas(b)) : g;
   }, n.params, GLASS_PX),
-  blurStudio: (n, [a]) => (n.params.blurMode === 'focusFrame' ? fbRun(n, a) : n.params.blurMode === 'gaussian' ? runBlur(n, [a]) : fxStudioRun(a, fx14BlurStudio, n.params, BLUR_PX)),
+  blurStudio: (n, [a]) => (n.params.blurMode === 'focusFrame' ? fbRun(n, a) : n.params.blurMode === 'gaussian' ? runBlur(n, [a]) : n.params.blurMode === 'spin' ? runSpinStudio(n, a) : fxStudioRun(a, fx14BlurStudio, n.params, BLUR_PX)),
   mirrorEffect: (n, [a]) => (a ? fx7Canvas(a, (s, W, H) => fx15Mirror(s, W, H, { ...FX15_DEFAULTS, ...n.params })) : null),
   kaleidoscopeEffect: (n, [a]) => (a ? fx7Canvas(a, (s, W, H) => fx15Kaleidoscope(s, W, H, { ...FX15_DEFAULTS, ...n.params })) : null),
   rippleEffect: (n, [a]) => (a ? fx7Canvas(a, (s, W, H) => fx15Ripple(s, W, H, { ...FX15_DEFAULTS, ...n.params })) : null),
@@ -26003,6 +26048,14 @@ function createNode(type, x, y, opts = {}) {
   if (type === 'image') n.params.file = 'Pattern (generated)';
   if (opts.params) Object.assign(n.params, opts.params);
   if (blurTipoAntigo && opts.params) Object.assign(n.params, blurParamsLegado(blurTipoAntigo, opts.params));   // 1.11.0: tipo + parâmetros do nó de blur antigo
+  if (type === 'blurStudio' && opts.params && 'bsAmount' in opts.params) {   // 1.11.1: nós salvos na 1.11.0 (parâmetros genéricos) voltam aos parâmetros específicos restaurados
+    const s = opts.params;
+    if (s.blurMode === 'gaussian' && !('radius' in s)) n.params.radius = Math.min(60, Math.max(0, (Number(s.bsAmount) || 0) / 100 * 30));
+    if (s.blurMode === 'directional' && !('dirDistance' in s)) { n.params.dirDistance = Number(s.bsAmount) || 0; n.params.dirAngle = Number(s.bsAngle) || 0; }
+    if (s.blurMode === 'radial' && !('radAmount' in s)) { n.params.radAmount = Number(s.bsAmount) || 0; n.params.radCenterX = Number(s.bsCenterX ?? 50); n.params.radCenterY = Number(s.bsCenterY ?? 50); }
+    if (s.blurMode === 'spin' && !('spinSpeed' in s)) { n.params.spinSpeed = (Number(s.bsAmount) || 0) / 100 * 60; n.params.spinCenterX = Number(s.bsCenterX ?? 50); n.params.spinCenterY = Number(s.bsCenterY ?? 45); n.params.spinDir = s.bsSpinDir === 'ccw' ? '-1' : '1'; }
+    if (s.blurMode === 'lens' && !('lensRadius' in s) && !('bokehRadius' in s)) { n.params.bokehRadius = (Number(s.bsAmount) || 0) / 100 * 10; n.params.lensRadius = (Number(s.bsAmount) || 0) / 100 * 4; }
+  }
   if (type === 'vandal' && !Array.isArray(n.params.vandalMasks)) n.params.vandalMasks=[];
   if (type === 'vandal' && opts.params) for (let i=1;i<=5;i++) if (!('vandalSoft'+i in opts.params)) n.params['vandalSoft'+i] = Number(opts.params.vandalSoft) || 0;
   if (oldVandal && !(opts.params && 'vandalMode' in opts.params)) n.params.vandalMode = 'classic';
@@ -28511,14 +28564,14 @@ function glassAplicaVis(raiz, params, n) {
 /* 2.9.46: Blur Studio same as Glass — only the parameters of the chosen mode
    (map taken from fx14BlurStudio: 'mix' only appears in box/texture/depth) */
 const BLUR_MODOS = {
-  gaussian: ['bsAmount', 'bsQuality'],
+  gaussian: ['radius', 'passes'],
   box: ['radius', 'passes', 'mix'],
   motion: ['motionAmount', 'motionAngle', 'motionSamples'],
-  radial: ['bsAmount', 'bsAngle', 'bsCenterX', 'bsCenterY', 'bsQuality'],
-  spin: ['bsAmount', 'bsCenterX', 'bsCenterY', 'bsSpinDir', 'bsQuality'],
-  lens: ['bsAmount', 'bsCenterX', 'bsCenterY', 'bsQuality'],
+  radial: ['radAmount', 'radCenterX', 'radCenterY', 'bsAngle', 'bsQuality'],
+  spin: ['spinCenterX', 'spinCenterY', 'spinSpeed', 'spinRadius', 'spinFalloff', 'spinCount', 'spinDir', 'spinIntensity'],
+  lens: ['lensRadius', 'bokehRadius', 'bsCenterX', 'bsCenterY'],
   surface: ['bsAmount', 'bsQuality', 'bsPreserveEdges'],
-  directional: ['bsAmount', 'bsAngle', 'bsQuality'],
+  directional: ['dirAngle', 'dirDistance', 'dirSamples'],
   texture: ['textureAmount', 'texture', 'mix'],
   depth: ['depthMap', 'invert', 'depthFocus', 'depthRange', 'maxBlur', 'mix'],
   dof: ['dofFocusY', 'dofRange', 'dofBlur'],
