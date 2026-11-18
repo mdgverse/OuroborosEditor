@@ -1,5 +1,21 @@
 # Blur Studio consolidado + Kinect Motion — 1.11.0
 
+> **1.11.1 — restauração dos parâmetros:** a consolidação inicial trocou
+> parâmetros específicos por genéricos (bsAmount/bsQuality) e o Spin
+> perdeu o motor de núcleo protegido. A 1.11.1 restaura os parâmetros
+> originais de cada nó antigo dentro do Type correspondente, com migração
+> 1:1 (inclusive dos nós salvos durante a janela 1.11.0):
+>
+> - **Gaussian** — Radius 0–60 + Passes (do nó Blur);
+> - **Directional** — Angle / Distance (px) 0–200 / Samples (Directional + Vector);
+> - **Radial / Zoom** — Amount (def. 30) + Center X/Y próprios;
+> - **Spin / Rotational** — motor GPU original restaurado
+>   (`runSpinStudio` + `spinBlurFx`/`spinMixFx`): Center X/Y, Blur angle,
+>   Radius (núcleo protegido), Falloff, Blur samples, Direction, Intensity;
+> - **Lens / Bokeh** — Lens Radius (defocus `fx31Defocus`) + Bokeh Radius
+>   (disco `fx32Bokeh`), cada um podendo ficar em 0;
+> - Box, Motion, Textured, Depth, DOF e Field mantêm seus parâmetros.
+
 ## 1. Consolidação dos blurs
 
 Todos os nós soltos de blur foram removidos do menu/palette e viraram
