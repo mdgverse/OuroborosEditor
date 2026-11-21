@@ -242,6 +242,9 @@ body:not(.mobile) .m-nav, body:not(.mobile) .m-sheet, body:not(.mobile) .m-toast
 .nala-modelo button:disabled{opacity:.5;cursor:default}
 .nala-barra{height:5px;background:rgba(255,255,255,.1);border-radius:3px;overflow:hidden;display:none}
 .nala-barra i{display:block;height:100%;width:0;background:#c9a86a;transition:width .2s}
+.nala-config[hidden]{display:none}
+.nala-cfg-tit{font-weight:700;color:var(--text-strong,#fff);font-size:12.5px}
+.nala-sobre{color:var(--text-dim,#999);line-height:1.45}
 .nala-form{display:flex;gap:7px;padding:9px;border-top:1px solid var(--line,#2a2d36)}
 .nala-form input{flex:1;background:var(--field2,#0d0f13);border:1px solid var(--line,#2a2d36);border-radius:9px;padding:8px 10px;color:var(--text,#eee);font-size:13px;outline:none;min-width:0}
 .nala-form input:focus{border-color:#c9a86a}
@@ -542,7 +545,7 @@ html, body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent}/* 1
 
 /* Versão do editor — o arquivo VERSION na raiz é a fonte da verdade
    (o build do APK usa o mesmo número no versionName e falha se divergir). */
-const APP_VERSION = '1.13.0';
+const APP_VERSION = '1.13.1';
 /* tooltip do botão da marca: só o nome do produto (a versão é metadado, não entra na marca) */
 {
   const marca = document.getElementById('brandBtn');
@@ -40053,10 +40056,24 @@ startScreenOpen();
       '6. Se algo não estiver no contexto, diga honestamente que não consegue verificar e sugira um próximo passo útil. NUNCA invente controles, nós ou recursos.',
       '7. Seja encorajadora sem exagero: nada de saudações repetidas, desculpas constantes ou emojis em excesso.',
       '8. Só aprofunde detalhes técnicos (listas completas de parâmetros, arquitetura) se o usuário pedir explicitamente.',
+      '9. Se o usuário só cumprimentar (oi, olá, bom dia…), devolva um cumprimento breve e pergunte como pode ajudar — sem nenhuma informação técnica.',
+      '10. Nunca despeje dados técnicos sem pedido: nada de contagem de nós/ligações, detalhes do nó selecionado, nome/licença/tamanho do modelo ou detalhes da base de conhecimento, a menos que o usuário pergunte exatamente isso.',
+      '11. Blocos marcados como "Contexto atual (interno)" são só para você responder melhor: não os repita nem os resuma ao usuário, salvo se ele perguntar sobre o próprio grafo/projeto.',
       'Você NÃO controla o editor: não afirme que clicou, criou ou alterou nós. Apenas oriente o usuário.',
       'Use SOMENTE o contexto verificado abaixo:',
       (blocos && blocos.length ? blocos.join('\n---\n') : '(sem contexto recuperado)'),
     ].join('\n');
+  }
+  /* Intenção especial da mensagem (1.13.1): cumprimentos e perguntas sobre o
+     próprio grafo/modelo NÃO passam pela busca técnica — têm resposta curta e
+     direta. Devolve 'saudacao' | 'modelo' | 'grafo' | null. */
+  const NALA_SAUD_RE = /^(oi+|ola+|eae|opa|salve|hey|hello|hi|fala ai)( tudo bem| como vai)?$|^(bom dia|boa tarde|boa noite)( tudo bem)?$|^(tudo bem|como vai)$/;
+  function nalaIntencao(texto) {
+    const t = nalaNorm(texto).trim().replace(/[!.,?;:]+/g, ' ').replace(/\s+/g, ' ').trim();
+    if (NALA_SAUD_RE.test(t)) return 'saudacao';
+    if (/(qual|que) (modelo|ia)\b|modelo (usado|usa|generativo|de ia|local)|qwen|nome do modelo/.test(t)) return 'modelo';
+    if (/quant(os|as) nos|quant(as|os) ligac|meu grafo|grafo atual|no selecionado|selecionad|estatisticas do (grafo|projeto)|o que tem no (meu )?(grafo|projeto)/.test(t)) return 'grafo';
+    return null;
   }
   /* Classifica a confiança da busca: 'fraco' = melhor pedir esclarecimento. */
   function nalaClassificar(docs, consulta) {
@@ -40146,12 +40163,17 @@ startScreenOpen();
   panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-label', 'Nala — assistente do editor');
   const head = $el('div', 'nala-head'); head.append(avatarHTML());
   const nomeBox = $el('div');
-  const statusEl = $el('div', 'nala-status', 'Conhecimento local (offline)');
-  nomeBox.append($el('div', 'nala-nome', 'Nala'), statusEl);
+  nomeBox.append($el('div', 'nala-nome', 'Nala'));
+  const btnCfg = $el('button', 'nala-x', '⚙'); btnCfg.type = 'button';
+  btnCfg.title = 'Configurações da Nala'; btnCfg.setAttribute('aria-label', 'Configurações da Nala');
   const btnX = $el('button', 'nala-x', '✕'); btnX.type = 'button'; btnX.title = 'Fechar';
-  head.append(nomeBox, btnX);
+  head.append(nomeBox, btnCfg, btnX);
   const msgs = $el('div', 'nala-msgs');
-  const cfg = $el('div', 'nala-config');
+  /* 1.13.1: contexto, modelo e "sobre" saíram da conversa — moram neste painel
+     opcional, fechado por padrão, aberto pelo ⚙ do cabeçalho. */
+  const cfg = $el('div', 'nala-config'); cfg.id = 'nalaCfg'; cfg.hidden = true;
+  const statusEl = $el('div', 'nala-status', 'Conhecimento local (offline)');
+  cfg.append($el('div', 'nala-cfg-tit', 'Configurações da Nala'), statusEl);
   const ctxLabel = $el('label');
   const ctxChk = document.createElement('input'); ctxChk.type = 'checkbox';
   ctxChk.checked = (() => { try { return localStorage.getItem('ouroboros:nala:ctx') === '1'; } catch (e) { return false; } })();
@@ -40161,12 +40183,14 @@ startScreenOpen();
   const modeloBtn = $el('button', null, 'Baixar e ativar modelo local (~512 MB)'); modeloBtn.type = 'button';
   const barra = $el('div', 'nala-barra'); const barraI = $el('i'); barra.append(barraI);
   modeloBox.append(modeloTxt, modeloBtn);
-  cfg.append(ctxLabel, modeloBox, barra);
+  const sobre = $el('div', 'nala-sobre', `Sobre a Nala: responde pela base de conhecimento local do editor (offline, sem enviar seus dados). O modelo generativo opcional é o ${NALA_MODELO.nome} (${NALA_MODELO.licenca}), baixa ~${NALA_MODELO.downloadMB} MB uma única vez — só com a sua permissão — e roda neste aparelho.`);
+  cfg.append(ctxLabel, modeloBox, barra, sobre);
+  btnCfg.addEventListener('click', () => { cfg.hidden = !cfg.hidden; });
   const form = $el('form', 'nala-form');
   const input = $el('input'); input.type = 'text'; input.placeholder = 'Pergunte sobre o editor…'; input.setAttribute('aria-label', 'Pergunte à Nala');
   const btnEnviar = $el('button', null, 'Enviar'); btnEnviar.type = 'submit';
   form.append(input, btnEnviar);
-  panel.append(head, msgs, cfg, form);
+  panel.append(head, cfg, msgs, form);
   document.body.append(btn, panel);
 
   /* Mobile: mantém o botão acima da timeline (altura real, muda com
@@ -40216,6 +40240,11 @@ startScreenOpen();
 
   /* ---------- respostas da base local (concisas, resposta primeiro) ---------- */
   function responderKB(pergunta) {
+    /* 1.13.1: cumprimento e "qual modelo?" têm resposta curta e direta —
+       nunca disparam a busca técnica nem despejam metadados. */
+    const intencao = nalaIntencao(pergunta);
+    if (intencao === 'saudacao') return 'Oi! Como posso ajudar você?';
+    if (intencao === 'modelo') return `Uso o modelo ${NALA_MODELO.nome} (${NALA_MODELO.licenca}) quando o modelo generativo está ativo: ele baixa ~${NALA_MODELO.downloadMB} MB uma única vez, roda neste aparelho e nada sai daqui. Com ele desligado, respondo pela base de conhecimento local do editor, offline. Você liga ou desliga em ⚙ Configurações da Nala.`;
     const docs = nalaDocs();
     const detalhado = /detalh|todos|complet|t[ée]cnic|par[âa]metros|arquitetur/i.test(pergunta);
     const classe = nalaClassificar(docs, pergunta);
@@ -40280,7 +40309,7 @@ self.onmessage = async (e) => {
         modeloTxt.textContent = 'Modelo generativo: ativo (local, neste aparelho)';
         modeloBtn.textContent = 'Desativar modelo';
         statusEl.textContent = 'Modelo local ativo (Qwen2.5-0.5B)';
-        addMsg('nala', 'Modelo local pronto. Continuo respondendo só com a base verificada do editor como contexto — e nada sai do aparelho.');
+        /* sem mensagem técnica automática na conversa: o estado aparece em ⚙ Configurações */
       } else if (d.tipo === 'resposta') {
         nalaGerando = false; btnEnviar.textContent = 'Enviar'; btnEnviar.classList.remove('parar');
         setEstado('responding'); addMsg('nala', d.texto || '(resposta vazia do modelo)');
@@ -40335,18 +40364,30 @@ self.onmessage = async (e) => {
       modeloTxt.textContent = 'Modelo generativo: desligado (respostas da base local)';
       modeloBtn.textContent = 'Baixar e ativar modelo local (~512 MB)';
       statusEl.textContent = 'Conhecimento local (offline)';
-      setEstado('listening'); addMsg('nala', 'Geração interrompida. O modelo foi descarregado; posso responder pela base local.');
+      setEstado('listening'); addMsg('nala', 'Geração interrompida.');
       return;
     }
     input.value = '';
     addMsg('user', pergunta);
     setEstado('thinking');
-    const ctxTxt = ctxChk.checked ? nalaContexto() : null;
+    /* 1.13.1: cumprimento e "qual modelo?" são respondidos direto, nos dois
+       modos — sem busca, sem Worker e sem metadados técnicos. */
+    const intencao = nalaIntencao(pergunta);
+    if (intencao === 'saudacao' || intencao === 'modelo') {
+      const resp = responderKB(pergunta);
+      setTimeout(() => { setEstado('responding'); addMsg('nala', resp); setTimeout(() => setEstado('listening'), 600); }, 30);
+      return;
+    }
+    /* O contexto da tela é INTERNO: nunca é colado na conversa. Ele só aparece
+       se o usuário perguntar do próprio grafo (intenção 'grafo'); fora isso,
+       serve de apoio silencioso para o modelo quando o usuário autorizou. */
+    const querGrafo = intencao === 'grafo';
+    const ctxTxt = (ctxChk.checked || querGrafo) ? nalaContexto() : null;
     if (nalaModeloPronto && nalaWorker) {
       nalaGerando = true; btnEnviar.textContent = 'Parar'; btnEnviar.classList.add('parar');
       const achados = nalaBuscar(nalaDocs(), pergunta, 4);
       const blocos = achados.map(d => `## ${d.titulo}\n${d.corpo}`);
-      if (ctxTxt) blocos.unshift('## Contexto atual (com consentimento do usuário)\n' + ctxTxt);
+      if (ctxTxt) blocos.unshift('## Contexto atual (interno — não repetir ao usuário)\n' + ctxTxt);
       nalaWorker.postMessage({ tipo: 'gerar', msgs: [
         { role: 'system', content: nalaSystemPrompt(blocos) },
         { role: 'user', content: pergunta },
@@ -40354,8 +40395,9 @@ self.onmessage = async (e) => {
       return;
     }
     setTimeout(() => {
-      let resp = responderKB(pergunta);
-      if (ctxTxt) resp = `(${ctxTxt})\n\n${resp}`;
+      const resp = querGrafo
+        ? (ctxTxt || 'Não consegui ler o grafo neste momento.')
+        : responderKB(pergunta);
       setEstado('responding'); addMsg('nala', resp);
       setTimeout(() => setEstado('listening'), 600);
     }, 30);
