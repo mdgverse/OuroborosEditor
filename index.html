@@ -207,6 +207,48 @@ body:not(.mobile) .m-nav, body:not(.mobile) .m-sheet, body:not(.mobile) .m-toast
 }
 @media (max-width: 620px){.topbar{padding:2px 3px;row-gap:1px}.brand{font-size:10.5px}.brand-mark{width:16px;height:16px;border-radius:4px}.tbtn{padding:2px 5px;font-size:10.5px}.tbtn.accent{padding:2px 7px}
 }</style>
+<style id="nala-css">
+/* ===== Nala — assistente do editor (1.12.0) ===== */
+#nalaBtn{position:fixed;right:14px;bottom:16px;z-index:4000;width:56px;height:56px;border-radius:50%;border:2px solid #c9a86a;background:#101410;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 22px rgba(0,0,0,.55);padding:0}
+#nalaBtn:hover,#nalaBtn:focus-visible{border-color:#ecd28f;outline:none;box-shadow:0 6px 26px rgba(201,168,106,.45)}
+.nala-avatar{position:relative;width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 35% 30%,#2a3324,#0c0f0a 70%);overflow:hidden;flex:none}
+.nala-avatar img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.nala-avatar .nala-letra{font:700 20px/1 system-ui,sans-serif;color:#ecd28f}
+.nala-avatar::after{content:"";position:absolute;inset:-2px;border-radius:50%;border:2px solid transparent}
+#nalaBtn[data-state="thinking"] .nala-avatar::after{border-top-color:#c9a86a;animation:nalaGira 0.9s linear infinite}
+#nalaBtn[data-state="responding"] .nala-avatar::after{border-color:rgba(201,168,106,.7);animation:nalaPulso 1.1s ease-in-out infinite}
+#nalaBtn[data-state="listening"] .nala-avatar::after{border-color:rgba(120,200,120,.75)}
+#nalaBtn[data-state="error"] .nala-avatar::after{border-color:#d66}
+#nalaBtn[data-state="error"]{border-color:#d66}
+@keyframes nalaGira{to{transform:rotate(360deg)}}
+@keyframes nalaPulso{0%,100%{opacity:.35}50%{opacity:1}}
+#nalaPanel{position:fixed;right:14px;bottom:82px;z-index:4000;width:min(372px,calc(100vw - 20px));height:min(560px,calc(100dvh - 110px));background:var(--panel2,#14161c);border:1px solid var(--outline,#333);border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.6);display:flex;flex-direction:column;overflow:hidden;color:var(--text,#ddd)}
+#nalaPanel[hidden]{display:none}
+.nala-head{display:flex;align-items:center;gap:9px;padding:9px 11px;border-bottom:1px solid var(--line,#2a2d36)}
+.nala-head .nala-avatar{width:34px;height:34px}.nala-head .nala-letra{font-size:15px}
+.nala-nome{font-weight:700;color:var(--text-strong,#fff);font-size:14px}
+.nala-status{font-size:11px;color:var(--text-dim,#999)}
+.nala-x{margin-left:auto;background:none;border:0;color:var(--text-dim,#999);font-size:17px;cursor:pointer;padding:4px 7px;border-radius:6px}
+.nala-x:hover{color:#fff;background:rgba(255,255,255,.08)}
+.nala-msgs{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:8px}
+.nala-msg{max-width:92%;padding:8px 11px;border-radius:12px;font-size:13px;line-height:1.45;white-space:pre-wrap;word-break:break-word}
+.nala-msg.user{align-self:flex-end;background:#2c4a2e;color:#eaffea;border-bottom-right-radius:4px}
+.nala-msg.nala{align-self:flex-start;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.07);border-bottom-left-radius:4px}
+.nala-msg.erro{background:rgba(160,40,40,.18);border-color:rgba(220,80,80,.4)}
+.nala-config{border-top:1px solid var(--line,#2a2d36);padding:7px 11px;font-size:11.5px;display:flex;flex-direction:column;gap:5px}
+.nala-config label{display:flex;gap:6px;align-items:flex-start;cursor:pointer;color:var(--text,#ccc)}
+.nala-modelo{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.nala-modelo button{background:#22301f;color:#cfe8c8;border:1px solid #3d5a35;border-radius:7px;padding:4px 9px;font-size:11.5px;cursor:pointer}
+.nala-modelo button:disabled{opacity:.5;cursor:default}
+.nala-barra{height:5px;background:rgba(255,255,255,.1);border-radius:3px;overflow:hidden;display:none}
+.nala-barra i{display:block;height:100%;width:0;background:#c9a86a;transition:width .2s}
+.nala-form{display:flex;gap:7px;padding:9px;border-top:1px solid var(--line,#2a2d36)}
+.nala-form input{flex:1;background:var(--field2,#0d0f13);border:1px solid var(--line,#2a2d36);border-radius:9px;padding:8px 10px;color:var(--text,#eee);font-size:13px;outline:none;min-width:0}
+.nala-form input:focus{border-color:#c9a86a}
+.nala-form button{background:#c9a86a;color:#191407;border:0;border-radius:9px;padding:8px 13px;font-weight:700;cursor:pointer}
+.nala-form button.parar{background:#5a2b2b;color:#ffd7d7}
+@media (prefers-reduced-motion: reduce){#nalaBtn .nala-avatar::after{animation:none!important}.nala-barra i{transition:none!important}}
+</style>
 <style id="ee-touch-css">/* ===== Dedo no aparelho (portado da referência) ===== */
 html, body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent}/* 1) alvos pequenos do nó: o dedo não acerta 12 px */
 .node .eye, .node .fold, .node .goout{position:relative;overflow:visible}.node .eye::after, .node .fold::after, .node .goout::after{
@@ -487,7 +529,7 @@ html, body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent}/* 1
 
 /* Versão do editor — o arquivo VERSION na raiz é a fonte da verdade
    (o build do APK usa o mesmo número no versionName e falha se divergir). */
-const APP_VERSION = '1.11.1';
+const APP_VERSION = '1.12.0';
 /* tooltip do botão da marca: só o nome do produto (a versão é metadado, não entra na marca) */
 {
   const marca = document.getElementById('brandBtn');
@@ -39643,6 +39685,314 @@ startScreenOpen();
     if (p && p.classList.contains('hidden')) { var t = document.getElementById('tlShow'); if (t) t.click(); }
     if (p && p.classList.contains('folded') && b) b.click();
   };
+})();
+
+/* =====================================================================
+   NALA — assistente especialista do editor (1.12.0)
+   Modo padrão: conhecimento local (offline, sem download, Web + APK).
+   Modelo generativo opcional: Qwen2.5-0.5B-Instruct (Apache-2.0) via
+   Transformers.js num Web Worker — download explícito de ~512 MB, NÃO
+   embutido no app. Detalhes e limites: docs/nala.md
+   ===================================================================== */
+(function () {
+  'use strict';
+  /* NALA_PURO_INI — lógica pura (testável sem DOM) */
+  const NALA_MODELO = {
+    nome: 'Qwen2.5-0.5B-Instruct', repo: 'onnx-community/Qwen2.5-0.5B-Instruct',
+    licenca: 'Apache-2.0', downloadMB: 512, ramGB: '~2 GB',
+    runtime: 'Transformers.js + ONNX Runtime Web (WASM/WebGPU) em Web Worker',
+    fonte: 'https://huggingface.co/onnx-community/Qwen2.5-0.5B-Instruct',
+  };
+  const NALA_STOP = new Set(['como', 'para', 'que', 'uma', 'com', 'por', 'dos', 'das', 'este', 'esta', 'isso', 'esse', 'essa', 'mais', 'muito', 'fazer', 'faz', 'the', 'and', 'for', 'with', 'what', 'how', 'can', 'use', 'node', 'efeito']);
+  function nalaNorm(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
+  function nalaTokens(s) {
+    const out = new Set();
+    for (const w of nalaNorm(s).split(/[^a-z0-9]+/)) if (w.length >= 3 && !NALA_STOP.has(w)) out.add(w);
+    return out;
+  }
+  function nalaPontuar(doc, toks) {
+    let p = 0;
+    const tit = nalaTokens(doc.titulo), tags = nalaTokens((doc.tags || []).join(' ')), corpo = nalaTokens(doc.corpo);
+    for (const t of toks) {
+      if (tit.has(t)) p += 3;
+      if (tags.has(t)) p += 2;
+      if (corpo.has(t)) p += 1;
+      for (const tt of tit) if (tt.length > 3 && (tt.startsWith(t) || t.startsWith(tt))) p += 1;
+    }
+    return p;
+  }
+  const NALA_SINONIMOS = { borrar: ['blur'], borrao: ['blur'], desfocar: ['blur'], desfoque: ['blur'], rastrear: ['tracker', 'blob'], manchas: ['blob'], girar: ['spin'], rodar: ['spin'], apagar: ['delete'], excluir: ['delete'] };
+  function nalaBuscar(docs, consulta, limite) {
+    const toks = nalaTokens(consulta);
+    for (const t of [...toks]) for (const s of (NALA_SINONIMOS[t] || [])) toks.add(s);
+    if (!toks.size) return [];
+    return docs.map(d => ({ d, p: nalaPontuar(d, toks) })).filter(x => x.p > 0)
+      .sort((a, b) => b.p - a.p).slice(0, limite || 4).map(x => x.d);
+  }
+  function nalaSystemPrompt(blocos) {
+    return [
+      'Você é a Nala, assistente especialista do Ouroboros Editor (editor de imagens/vídeo por nós, Web e Android).',
+      'Responda em português brasileiro, de forma direta e prática, com passos numerados quando explicar um fluxo.',
+      'Use SOMENTE o contexto abaixo e o que sabe do editor. Se algo não estiver no contexto, diga que não tem essa informação — nunca invente controles, nós ou recursos.',
+      'Você NÃO controla o editor: não afirme que clicou, criou ou alterou nós. Apenas oriente o usuário.',
+      'Contexto verificado do editor:',
+      (blocos && blocos.length ? blocos.join('\n---\n') : '(sem contexto recuperado)'),
+    ].join('\n');
+  }
+  /* NALA_PURO_FIM */
+
+  /* Tópicos curados — atualizar junto com a interface (docs/nala.md). */
+  const NALA_TOPICOS = [
+    { id: 'home', titulo: 'Home, projetos e pastas', tags: ['inicio', 'home', 'projeto', 'pasta', 'folder', 'abrir', 'salvar projeto', 'sessao'], corpo: 'A Home lista projetos e pastas. Projetos e a última sessão são guardados no próprio aparelho/navegador (localStorage). Pastas organizam projetos; a pasta aberta espalha os projetos em fileiras rolantes (1.5.0). Há Backup/Restore para exportar projetos, pastas e Assets num .json.', passos: ['Na Home, toque num projeto para abrir ou crie um novo.', 'Use pastas para agrupar; arraste/organize pela Home.', 'Faça Backup pelo menu quando quiser uma cópia fora do aparelho.'] },
+    { id: 'adicionar', titulo: 'Adicionar nós (Shift+A)', tags: ['adicionar', 'novo no', 'add', 'shift+a', 'wheel', 'circulo', 'categoria', 'lista', 'menu radial'], corpo: 'Shift+A (ou o botão Add) abre o círculo de categorias (Wheel). Escolher uma categoria abre a lista de nós dela; a seta volta ao círculo. Também há busca por nome e palavras-chave (o campo kw de cada nó).', passos: ['Pressione Shift+A onde quer criar o nó.', 'Escolha a categoria no círculo.', 'Clique no nó na lista — ele nasce no ponto clicado.'] },
+    { id: 'ligar', titulo: 'Ligar nós e sockets', tags: ['ligar', 'conectar', 'fio', 'wire', 'socket', 'entrada', 'saida', 'link', 'cabo'], corpo: 'Cada nó tem sockets de entrada (esquerda) e a saída (direita). Arraste de um socket ao outro para ligar. Alt+arrastar sobre fios faz zip tie (corta). O Output/Preview mostra o resultado da cadeia; um nó sem entrada de imagem pode usar a fonte automática quando o tipo permite.', passos: ['Arraste da saída de um nó até a entrada do próximo.', 'Solte sobre o socket para confirmar a ligação.', 'Use Del para apagar nós/fios selecionados.'] },
+    { id: 'parametros', titulo: 'Parâmetros e inspetor', tags: ['parametro', 'slider', 'controle', 'inspetor', 'ajustar', 'painel do no'], corpo: 'Os controles ficam no corpo/painel do nó. Vários nós mostram só os parâmetros do modo escolhido (ex.: Blur Studio e Glass Studio). Valores são guardados no projeto; controles escondidos pelo modo atual mantêm o valor salvo. Sliders numéricos aceitam ajuste fino; a prévia atualiza ao mudar.', passos: ['Selecione o nó para ver os controles.', 'Mude o modo/tipo primeiro — os parâmetros relevantes aparecem.', 'Ajuste e observe a prévia do Output.'] },
+    { id: 'imagem', titulo: 'Imagem, GIF, vídeo e Assets', tags: ['imagem', 'video', 'gif', 'importar', 'foto', 'asset', 'midia', 'abrir arquivo'], corpo: 'O nó Image aceita imagem, GIF e vídeo ("Open image, GIF or video…"), com resolução máxima configurável (1024/2048/4096 px). Assets podem ser importados e organizados em pastas; GIFs/vídeos alimentam a Timeline. A análise de nós de vídeo usa quadros do clipe.', passos: ['Adicione um nó Image e escolha o arquivo.', 'Ajuste a resolução máxima se precisar de mais detalhe.', 'Ligue a saída do Image aos efeitos e ao Output.'] },
+    { id: 'exportar', titulo: 'Prévia e exportação', tags: ['exportar', 'export', 'baixar', 'download', 'salvar imagem', 'render', 'output', 'resultado'], corpo: 'O que a prévia mostra é o que exporta (preview = export). A exportação gera a imagem do Artboard/Output atual; no Android o salvamento usa o MediaStore (galeria) e na Web o download do navegador. GIF/vídeo: exporte pela Timeline quando houver animação.', passos: ['Confira o resultado no nó Output.', 'Use o comando de exportar da barra/artboard.', 'No Android, a imagem vai para a galeria do aparelho.'] },
+    { id: 'timeline', titulo: 'Timeline e animação', tags: ['timeline', 'animacao', 'keyframe', 'chave', 'quadro', 'frame', 'fps', 'loop', 'tempo'], corpo: 'A Timeline anima parâmetros com chaves: I insere chave, K toca/pausa, setas andam quadro a quadro (Shift = ±10). Parâmetros animáveis têm o losango ◆. Dá para duplicar (Ctrl+D), apagar (Del) e navegar entre chaves (↑/↓).', passos: ['Abra a Timeline e selecione o nó.', 'Mova o cursor e pressione I para criar a chave.', 'Ajuste o parâmetro e crie outra chave noutro quadro.'] },
+    { id: 'artboards', titulo: 'Artboards (vários canvas)', tags: ['artboard', 'canvas', 'documento', 'varios canvas', 'prancheta'], corpo: 'Um documento pode ter vários Artboards (canvas) — cada um com seu grafo/saída. Dá para adicionar artboards e exportar individualmente ou o documento.', passos: ['Use "+ Artboard" para criar outro canvas.', 'Monte o grafo de cada artboard.', 'Exporte o artboard ativo ou o conjunto.'] },
+    { id: 'comunidade', titulo: 'Comunidade (carrossel da Home)', tags: ['comunidade', 'community', 'tumblr', 'hashtag', 'carrossel', 'feed'], corpo: 'A Home mostra o carrossel "Community" com artes publicadas no Tumblr com #everythingeditor / #ouroboroseditor. Arrastar pausa e move o carrossel; o feed é coletado automaticamente (Actions) e não é editável dentro do app.', passos: ['Publique no Tumblr com #ouroboroseditor.', 'A arte entra no feed na próxima coleta automática.'] },
+    { id: 'android', titulo: 'Web x Android (APK)', tags: ['android', 'apk', 'celular', 'telefone', 'web', 'navegador', 'diferenca', 'plataforma'], corpo: 'O APK Android roda o mesmo editor da Web (WebView, Android 10+). Diferenças práticas: na Web o salvamento é download do navegador; no Android vai para a galeria (MediaStore). Recursos que dependem de WebGPU/navegador específico podem variar. Sem internet o editor funciona; só a Comunidade e downloads externos precisam de rede.', passos: [] },
+    { id: 'atalhos', titulo: 'Atalhos principais', tags: ['atalho', 'teclado', 'shortcut', 'ctrl+z', 'desfazer', 'atalhos'], corpo: 'Shift+A adicionar · Ctrl+X/C/V recortar/copiar/colar · Ctrl+D duplicar · Del apagar · Ctrl+Z desfazer · Home enquadrar tudo · roda do mouse = zoom · Espaço+arrastar ou botão do meio = pan · Alt+arrastar sobre fios = zip tie. Na Timeline: I chave · K tocar · ←/→ quadro · ↑/↓ chave anterior/próxima.', passos: [] },
+    { id: 'limites', titulo: 'O que a Nala sabe e não sabe', tags: ['nala', 'assistente', 'ajuda', 'sabe', 'limite', 'modelo', 'ia'], corpo: 'A Nala responde a partir de uma base de conhecimento verificada do editor (tópicos + registro real de nós) — offline e sem enviar seus dados. O modelo generativo local (Qwen2.5-0.5B-Instruct, Apache-2.0) é opcional, baixa ~512 MB uma única vez com sua permissão e roda no aparelho. A Nala orienta, mas não clica nem altera o grafo por você.', passos: [] },
+  ];
+
+  function nalaDocsNos() {
+    const docs = [];
+    try {
+      for (const [id, def] of Object.entries(NODE_TYPES)) {
+        const ps = (def.params || []).filter(p => p && p.key && p.type !== 'hidden').map(p => {
+          let s = `${p.label} (${p.key}`;
+          if (p.type === 'num' || typeof p.min === 'number') s += `, ${p.min}–${p.max}, padrão ${p.def}`;
+          else if (p.options) s += ': ' + p.options.map(o => Array.isArray(o) ? o[1] : o).join('/') + `, padrão ${p.def}`;
+          else s += `, padrão ${p.def}`;
+          return s + ')';
+        });
+        const cat = (typeof CATS !== 'undefined' && CATS[def.cat] && CATS[def.cat].label) || def.cat || '';
+        docs.push({
+          id: 'no:' + id, titulo: def.title || id, cat,
+          tags: [id, def.title, cat, def.kw || ''],
+          corpo: `Nó ${def.title} (categoria ${cat}). Entradas: ${(def.inputs || []).join(', ') || 'nenhuma'}. Saída: imagem processada (ou conforme o tipo). Parâmetros: ${ps.join('; ') || 'nenhum'}.`,
+          noId: id,
+        });
+      }
+    } catch (e) { /* sem registro: só tópicos */ }
+    return docs;
+  }
+
+  /* ---------- contexto ao vivo (somente com consentimento) ---------- */
+  function nalaContexto() {
+    try {
+      const partes = [];
+      partes.push(`Grafo atual: ${nodes.size} nó(s), ${links.length} ligação(ões).`);
+      const selIds = [...selected];
+      if (selIds.length === 1) {
+        const n = nodes.get(selIds[0]);
+        if (n) {
+          const def = NODE_TYPES[n.type];
+          partes.push(`Nó selecionado: ${(def && def.title) || n.type} (tipo ${n.type}).`);
+          const ligados = links.filter(l => l.to === n.id).length, saindo = links.filter(l => l.from === n.id).length;
+          partes.push(`Ligações do nó selecionado: ${ligados} entrando, ${saindo} saindo.`);
+          const vis = n.el ? [...n.el.querySelectorAll('[data-pkey]')].filter(el => el.style.display !== 'none').map(el => el.dataset.pkey) : [];
+          if (vis.length) partes.push(`Controles visíveis agora: ${vis.join(', ')}.`);
+        }
+      } else if (selIds.length > 1) partes.push(`${selIds.length} nós selecionados.`);
+      return partes.join(' ');
+    } catch (e) { return null; }
+  }
+
+  /* ---------- UI ---------- */
+  const $el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+  const avatarHTML = () => {
+    const a = $el('span', 'nala-avatar');
+    const img = $el('img');
+    img.alt = ''; img.src = 'assets/nala/nala-idle.png';   // slot da arte final (docs/nala.md)
+    img.onerror = () => img.remove();
+    const letra = $el('span', 'nala-letra', 'N');
+    a.append(img, letra);
+    return a;
+  };
+  const btn = $el('button', null); btn.id = 'nalaBtn';
+  btn.type = 'button'; btn.title = 'Nala — assistente do editor'; btn.setAttribute('aria-label', 'Abrir a Nala, assistente do editor');
+  btn.dataset.state = 'idle'; btn.append(avatarHTML());
+  const panel = $el('section'); panel.id = 'nalaPanel'; panel.hidden = true;
+  panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-label', 'Nala — assistente do editor');
+  const head = $el('div', 'nala-head'); head.append(avatarHTML());
+  const nomeBox = $el('div');
+  const statusEl = $el('div', 'nala-status', 'Conhecimento local (offline)');
+  nomeBox.append($el('div', 'nala-nome', 'Nala'), statusEl);
+  const btnX = $el('button', 'nala-x', '✕'); btnX.type = 'button'; btnX.title = 'Fechar';
+  head.append(nomeBox, btnX);
+  const msgs = $el('div', 'nala-msgs');
+  const cfg = $el('div', 'nala-config');
+  const ctxLabel = $el('label');
+  const ctxChk = document.createElement('input'); ctxChk.type = 'checkbox';
+  ctxChk.checked = (() => { try { return localStorage.getItem('ouroboros:nala:ctx') === '1'; } catch (e) { return false; } })();
+  ctxLabel.append(ctxChk, $el('span', null, 'Usar contexto da tela (nó selecionado e ligações — fica no aparelho)'));
+  const modeloBox = $el('div', 'nala-modelo');
+  const modeloTxt = $el('span', null, 'Modelo generativo: desligado (respostas da base local)');
+  const modeloBtn = $el('button', null, 'Baixar e ativar modelo local (~512 MB)'); modeloBtn.type = 'button';
+  const barra = $el('div', 'nala-barra'); const barraI = $el('i'); barra.append(barraI);
+  modeloBox.append(modeloTxt, modeloBtn);
+  cfg.append(ctxLabel, modeloBox, barra);
+  const form = $el('form', 'nala-form');
+  const input = $el('input'); input.type = 'text'; input.placeholder = 'Pergunte sobre o editor…'; input.setAttribute('aria-label', 'Pergunte à Nala');
+  const btnEnviar = $el('button', null, 'Enviar'); btnEnviar.type = 'submit';
+  form.append(input, btnEnviar);
+  panel.append(head, msgs, cfg, form);
+  document.body.append(btn, panel);
+
+  let nalaDocsCache = null;
+  const nalaDocs = () => nalaDocsCache || (nalaDocsCache = [...NALA_TOPICOS, ...nalaDocsNos()]);
+  const setEstado = s => { btn.dataset.state = s; };
+  function addMsg(cls, texto) {
+    const m = $el('div', 'nala-msg ' + cls, texto);
+    msgs.append(m); msgs.scrollTop = msgs.scrollHeight;
+    return m;
+  }
+  function abrir() {
+    panel.hidden = false; setEstado('listening'); input.focus();
+    if (!msgs.childElementCount) addMsg('nala', 'Oi! Eu sou a Nala, assistente do Ouroboros Editor. Pergunte sobre nós, parâmetros ou fluxos — ex.: "como funciona o Blur Studio?" ou "o que o Blob Tracker faz?". Respondo com a base local, sem enviar nada para fora.');
+  }
+  function fechar() { panel.hidden = true; setEstado('idle'); btn.focus(); }
+  btn.addEventListener('click', () => (panel.hidden ? abrir() : fechar()));
+  btnX.addEventListener('click', fechar);
+  panel.addEventListener('keydown', e => { if (e.key === 'Escape') fechar(); });
+  input.addEventListener('focus', () => { if (btn.dataset.state === 'idle') setEstado('listening'); });
+  ctxChk.addEventListener('change', () => { try { localStorage.setItem('ouroboros:nala:ctx', ctxChk.checked ? '1' : '0'); } catch (e) {} });
+
+  /* ---------- respostas da base local ---------- */
+  function responderKB(pergunta) {
+    const achados = nalaBuscar(nalaDocs(), pergunta, 4);
+    if (!achados.length) {
+      return 'Não encontrei isso na minha base verificada do editor — prefiro não inventar. Tente perguntar pelo nome do nó (ex.: "Glass Studio") ou pelo que quer fazer (ex.: "borrar só o fundo").';
+    }
+    const [top, ...resto] = achados;
+    let out = top.corpo;
+    const docTop = NALA_TOPICOS.find(t => t.id === top.id);
+    if (docTop && docTop.passos && docTop.passos.length) out += '\n\nPasso a passo:\n' + docTop.passos.map((p, i) => `${i + 1}. ${p}`).join('\n');
+    const relacionados = resto.filter(d => d.noId).map(d => d.titulo);
+    if (relacionados.length) out += `\n\nNós relacionados: ${relacionados.join(', ')}.`;
+    return out;
+  }
+
+  /* ---------- modelo generativo opcional (Worker) ---------- */
+  let nalaWorker = null, nalaModeloPronto = false, nalaGerando = false, nalaResolver = null;
+  const NALA_WORKER_SRC = `
+import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.0/+esm';
+env.allowLocalModels = false;
+env.backends.onnx.wasm.numThreads = 1;
+let pipe = null;
+self.onmessage = async (e) => {
+  const d = e.data;
+  try {
+    if (d.tipo === 'carregar') {
+      pipe = await pipeline('text-generation', 'onnx-community/Qwen2.5-0.5B-Instruct', {
+        dtype: 'q4', device: d.device,
+        progress_callback: (p) => self.postMessage({ tipo: 'progresso', status: p.status, progresso: p.progress || 0, arquivo: p.file || '' }),
+      });
+      self.postMessage({ tipo: 'pronto' });
+    } else if (d.tipo === 'gerar' && pipe) {
+      const out = await pipe(d.msgs, { max_new_tokens: 220, do_sample: false });
+      let texto = out && out[0] && out[0].generated_text;
+      if (Array.isArray(texto)) texto = texto.length ? (texto[texto.length - 1].content || '') : '';
+      self.postMessage({ tipo: 'resposta', texto: String(texto || '').trim() });
+    }
+  } catch (err) { self.postMessage({ tipo: 'erro', msg: String((err && err.message) || err) }); }
+};`;
+  function nalaWorkerCriar() {
+    const w = new Worker(URL.createObjectURL(new Blob([NALA_WORKER_SRC], { type: 'text/javascript' })), { type: 'module' });
+    w.onmessage = e => {
+      const d = e.data;
+      if (d.tipo === 'progresso') {
+        barra.style.display = 'block';
+        barraI.style.width = (d.status === 'progress' ? Math.round(d.progresso) : 8) + '%';
+        modeloTxt.textContent = `Baixando modelo… ${d.arquivo || ''} ${d.status === 'progress' ? Math.round(d.progresso) + '%' : ''}`;
+      } else if (d.tipo === 'pronto') {
+        nalaModeloPronto = true; barra.style.display = 'none';
+        modeloTxt.textContent = 'Modelo generativo: ativo (local, neste aparelho)';
+        modeloBtn.textContent = 'Desativar modelo';
+        statusEl.textContent = 'Modelo local ativo (Qwen2.5-0.5B)';
+        addMsg('nala', 'Modelo local pronto. Continuo respondendo só com a base verificada do editor como contexto — e nada sai do aparelho.');
+      } else if (d.tipo === 'resposta') {
+        nalaGerando = false; btnEnviar.textContent = 'Enviar'; btnEnviar.classList.remove('parar');
+        setEstado('responding'); addMsg('nala', d.texto || '(resposta vazia do modelo)');
+        setTimeout(() => { if (!nalaGerando) setEstado('listening'); }, 600);
+      } else if (d.tipo === 'erro') {
+        nalaGerando = false; btnEnviar.textContent = 'Enviar'; btnEnviar.classList.remove('parar');
+        setEstado('error');
+        addMsg('erro', 'O modelo local falhou: ' + d.msg + '\nVoltei para a base de conhecimento local, que continua funcionando offline.');
+        nalaModeloPronto = false; modeloBtn.textContent = 'Baixar e ativar modelo local (~512 MB)';
+        modeloTxt.textContent = 'Modelo generativo: desligado (respostas da base local)';
+        statusEl.textContent = 'Conhecimento local (offline)';
+      }
+    };
+    w.onerror = () => { setEstado('error'); addMsg('erro', 'Falha ao iniciar o Worker do modelo. A base local continua disponível.'); };
+    return w;
+  }
+  modeloBtn.addEventListener('click', () => {
+    if (nalaModeloPronto || nalaWorker) {
+      if (nalaWorker) nalaWorker.terminate();
+      nalaWorker = null; nalaModeloPronto = false; barra.style.display = 'none';
+      modeloBtn.textContent = 'Baixar e ativar modelo local (~512 MB)';
+      modeloTxt.textContent = 'Modelo generativo: desligado (respostas da base local)';
+      statusEl.textContent = 'Conhecimento local (offline)';
+      return;
+    }
+    const ok = window.confirm(
+      'Baixar o modelo local da Nala?\n\n' +
+      '• Modelo: ' + NALA_MODELO.nome + ' (' + NALA_MODELO.licenca + ')\n' +
+      '• Download único de ~' + NALA_MODELO.downloadMB + ' MB da fonte oficial (Hugging Face)\n' +
+      '• Memória estimada: ' + NALA_MODELO.ramGB + ' durante o uso\n' +
+      '• Roda 100% no aparelho (Web/Android), sem servidor e sem enviar dados\n' +
+      '• Em aparelhos fracos pode ser lento ou falhar por falta de memória; a base local continua como alternativa.');
+    if (!ok) return;
+    if (typeof Worker === 'undefined') { setEstado('error'); addMsg('erro', 'Este navegador/WebView não suporta Web Workers — o modelo local não pode rodar aqui. A base local segue disponível.'); return; }
+    modeloBtn.disabled = true; modeloTxt.textContent = 'Preparando download…';
+    try {
+      nalaWorker = nalaWorkerCriar();
+      nalaWorker.postMessage({ tipo: 'carregar', device: (navigator.gpu ? 'webgpu' : 'wasm') });
+    } catch (e) {
+      setEstado('error'); addMsg('erro', 'Não consegui iniciar o download do modelo: ' + (e && e.message || e));
+    } finally { modeloBtn.disabled = false; }
+  });
+
+  /* ---------- enviar ---------- */
+  form.addEventListener('submit', e => {
+    e.preventDefault();
+    const pergunta = input.value.trim();
+    if (!pergunta) return;
+    if (nalaGerando && nalaWorker) {           // Parar: encerra o Worker (cancelamento real)
+      nalaWorker.terminate(); nalaWorker = null; nalaModeloPronto = false; nalaGerando = false;
+      btnEnviar.textContent = 'Enviar'; btnEnviar.classList.remove('parar');
+      modeloTxt.textContent = 'Modelo generativo: desligado (respostas da base local)';
+      modeloBtn.textContent = 'Baixar e ativar modelo local (~512 MB)';
+      statusEl.textContent = 'Conhecimento local (offline)';
+      setEstado('listening'); addMsg('nala', 'Geração interrompida. O modelo foi descarregado; posso responder pela base local.');
+      return;
+    }
+    input.value = '';
+    addMsg('user', pergunta);
+    setEstado('thinking');
+    const ctxTxt = ctxChk.checked ? nalaContexto() : null;
+    if (nalaModeloPronto && nalaWorker) {
+      nalaGerando = true; btnEnviar.textContent = 'Parar'; btnEnviar.classList.add('parar');
+      const achados = nalaBuscar(nalaDocs(), pergunta, 4);
+      const blocos = achados.map(d => `## ${d.titulo}\n${d.corpo}`);
+      if (ctxTxt) blocos.unshift('## Contexto atual (com consentimento do usuário)\n' + ctxTxt);
+      nalaWorker.postMessage({ tipo: 'gerar', msgs: [
+        { role: 'system', content: nalaSystemPrompt(blocos) },
+        { role: 'user', content: pergunta },
+      ]});
+      return;
+    }
+    setTimeout(() => {
+      let resp = responderKB(pergunta);
+      if (ctxTxt) resp = `(${ctxTxt})\n\n${resp}`;
+      setEstado('responding'); addMsg('nala', resp);
+      setTimeout(() => setEstado('listening'), 600);
+    }, 30);
+  });
 })();
 
 })();
