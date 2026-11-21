@@ -542,7 +542,7 @@ html, body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent}/* 1
 
 /* Versão do editor — o arquivo VERSION na raiz é a fonte da verdade
    (o build do APK usa o mesmo número no versionName e falha se divergir). */
-const APP_VERSION = '1.12.2';
+const APP_VERSION = '1.13.0';
 /* tooltip do botão da marca: só o nome do produto (a versão é metadado, não entra na marca) */
 {
   const marca = document.getElementById('brandBtn');
@@ -23440,6 +23440,13 @@ function wfEstilo() {
     '.wf-chip{font-size:10px;padding:2px 6px;border-radius:999px;background:#2a3038;border:1px solid #39414b;color:#b8c2cf}',
     '.wf-aud{font-size:10px;padding:2px 6px;border-radius:999px;background:#3a2530;border:1px solid #6b3a4a;color:#ffb3c4}',
     '.wf-vazio{color:#8d96a4;font-size:13px;padding:16px 2px}',
+    '.wf-t.wf-user{cursor:default}',
+    '.wf-urodape{display:flex;align-items:center;gap:8px;margin-top:5px;flex-wrap:wrap}',
+    '.wf-umeta{font-size:11px;color:#8d96a4;margin-right:auto;white-space:nowrap}',
+    '.wf-ubtns{display:flex;gap:6px;flex-wrap:wrap}',
+    '.wf-uaplicar{background:var(--accent,#3f6fd8);border:1px solid var(--accent,#3f6fd8);color:#fff;border-radius:7px;min-height:32px;padding:0 12px;font-size:12.5px;cursor:pointer}',
+    '.wf-umenor{background:var(--field,#1b1f26);border:1px solid var(--line,#333);color:#c8cfd8;border-radius:7px;min-height:32px;padding:0 10px;font-size:12.5px;cursor:pointer}',
+    '.wf-udel{color:#ff9c9c}',
   ].join('\n');
   document.head.append(st);
 }
@@ -23488,6 +23495,7 @@ function wfTela() {
     pinta();
   });
   pinta();
+  wfUserReload().then(() => { if (document.getElementById('wfScr')) pinta(); });
   setTimeout(() => { try { busca.focus(); } catch (e) {} }, 30);
 }
 function wfPinta(q, cat, chipsBar, lista, qtd) {
@@ -23502,8 +23510,11 @@ function wfPinta(q, cat, chipsBar, lista, qtd) {
   };
   const cont = wfContagem();
   mkChip('todos', 'All', total);
+  mkChip('meus', '⭐ Meus Workflows', wfUserList.length);
   for (const [id, rotulo] of WF_CATS) mkChip(id, rotulo, cont[id] || 0);
   lista.textContent = '';
+  let meusAchados = 0;
+  if (cat === 'todos' || cat === 'meus') meusAchados = wfPintaMeus(q, cat, lista);
   const casa = (t) => {
     if (cat !== 'todos' && t.cat !== cat) return false;
     if (!q) return true;
@@ -23537,8 +23548,49 @@ function wfPinta(q, cat, chipsBar, lista, qtd) {
     }
     lista.append(grade);
   }
-  if (!achados) lista.append(E('div', 'wf-vazio', 'No workflow matches this filter.'));
-  qtd.textContent = achados + ' / ' + total + ' ' + 'templates';
+  if (!achados && !meusAchados) lista.append(E('div', 'wf-vazio', 'No workflow matches this filter.'));
+  qtd.textContent = (achados + meusAchados) + ' / ' + (total + wfUserList.length) + ' ' + 'templates';
+}
+/* Seção "Meus Workflows": templates salvos pelo usuário com Ctrl+S → Salvar em Workflows.
+   Em "All" só aparece se houver algo salvo; no filtro próprio, mostra o convite vazio. */
+function wfPintaMeus(q, cat, lista) {
+  const itens = wfUserList.filter(w => !q || (((w.nome || '') + ' ' + (w.desc || '')).toLowerCase().indexOf(q) >= 0));
+  if (!itens.length) {
+    if (cat === 'meus') {
+      lista.append(E('div', 'wf-cat', '⭐ Meus Workflows'));
+      lista.append(E('div', 'wf-vazio', 'Nenhum workflow salvo ainda. Monte um grafo no editor e aperte Ctrl+S → “Salvar em Workflows” para guardar um template reutilizável aqui.'));
+    }
+    return 0;
+  }
+  lista.append(E('div', 'wf-cat', '⭐ Meus Workflows'));
+  const grade = E('div', 'wf-grid');
+  for (const w of itens) {
+    const card = E('div', 'wf-t wf-user');
+    card.append(E('div', 'wf-tn', w.nome || 'Sem nome'));
+    if (w.desc) card.append(E('div', 'wf-td', w.desc));
+    const efeitos = (w.nos || []).filter(n => n[0] !== 'image' && n[0] !== 'output' && n[0] !== 'audio');
+    card.append(E('div', 'wf-cadeia', efeitos.length ? efeitos.map(n => (NODE_TYPES[n[0]] ? NODE_TYPES[n[0]].title : n[0])).join(' → ') : 'Grafo sem efeitos'));
+    const rodape = E('div', 'wf-urodape');
+    rodape.append(E('span', 'wf-umeta', ((w.nos || []).length) + ' nós' + (w.updated ? ' • ' + new Date(w.updated).toLocaleDateString('pt-BR') : '')));
+    const btns = E('div', 'wf-ubtns');
+    const bAplicar = E('button', 'wf-uaplicar', 'Aplicar');
+    bAplicar.type = 'button';
+    bAplicar.title = 'Monta este workflow no editor (como os modelos prontos)';
+    bAplicar.addEventListener('click', () => { wfCria(w.id); const sc = document.getElementById('wfScr'); if (sc) sc.remove(); });
+    const bAtualizar = E('button', 'wf-umenor', 'Atualizar');
+    bAtualizar.type = 'button';
+    bAtualizar.title = 'Substitui o conteúdo salvo pelo grafo aberto agora no editor';
+    bAtualizar.addEventListener('click', () => wfUserOverwrite(w.id));
+    const bExcluir = E('button', 'wf-umenor wf-udel', 'Excluir');
+    bExcluir.type = 'button';
+    bExcluir.addEventListener('click', () => wfUserDelete(w.id));
+    btns.append(bAplicar, bAtualizar, bExcluir);
+    rodape.append(btns);
+    card.append(rodape);
+    grade.append(card);
+  }
+  lista.append(grade);
+  return itens.length;
 }
 function nomeParamDe(tipo, chave) {
   const p = (NODE_TYPES[tipo].params || []).find(q => q.key === chave);
@@ -23546,7 +23598,8 @@ function nomeParamDe(tipo, chave) {
 }
 /* builds the template's graph (with a project open, it switches inside it) */
 function wfCria(id) {
-  const t = WF_TEMPLATES.find(x => x.id === id);
+  /* os Workflows salvos pelo usuário (wfUserList) entram no mesmo caminho dos embutidos */
+  const t = WF_TEMPLATES.concat(wfUserList).find(x => x.id === id);
   if (!t) return null;
   /* 2.9.27: with a project open, the Workflow switches the graph inside that
      same project (same id/name/folder) — no other project is created. */
@@ -23555,11 +23608,16 @@ function wfCria(id) {
   const feitos = [];
   t.nos.forEach((item) => {
     const [tipo, x, y, params] = item;
-    const n = createNode(tipo, x || 60, y || 120, params ? { params: { ...params } } : undefined);
-    feitos.push(n);
+    const extra = item[4] || {};   // só os Workflows do usuário trazem collapsed/tf
+    if (!NODE_TYPES[tipo]) { feitos.push(null); return; }
+    const opts = {};
+    if (params) opts.params = { ...params };
+    if (extra.collapsed) opts.collapsed = true;
+    if (extra.tf) opts.tf = extra.tf;
+    feitos.push(createNode(tipo, x || 60, y || 120, Object.keys(opts).length ? opts : undefined));
   });
-  for (const [a, b, entrada] of (t.liga || [])) connect(feitos[a].id, feitos[b].id, entrada || 0);
-  const noSaida = feitos.find(n => n.type === 'output') || feitos[feitos.length - 1];
+  for (const [a, b, entrada, saida] of (t.liga || [])) if (feitos[a] && feitos[b]) connect(feitos[a].id, feitos[b].id, entrada || 0, saida || 0);
+  const noSaida = feitos.find(n => n && n.type === 'output') || feitos[feitos.length - 1];
   if (noSaida && noSaida.type === 'output') previewId = noSaida.id;
   if (typeof frameAll === 'function') frameAll();
   if (TL.keys.size) TL.keys.clear();
@@ -23597,6 +23655,68 @@ function wfMontaBotoes() {
   }
 }
 setTimeout(wfMontaBotoes, 0);
+
+/* ---------- Meus Workflows: templates que o usuário salva do próprio grafo ----------
+   Nascem no Ctrl+S → "Salvar em Workflows" e moram na loja "workflows" do mesmo
+   IndexedDB dos projetos (entram no Backup/Restore). O registro usa o MESMO formato
+   dos modelos prontos ({ id, nome, desc, nos, liga }), então o wfCria aplica os dois
+   sem caminho separado. nos[i] = [tipo, x, y, params?, { collapsed, tf }?] e
+   liga[i] = [de, para, entrada, saida] (índices dentro de nos). */
+let wfUserList = [];
+async function wfUserReload() {
+  try {
+    const l = await SS_DB.listWorkflows();
+    wfUserList = (Array.isArray(l) ? l : []).slice().sort((a, b) => (b.updated || 0) - (a.updated || 0));
+  } catch (e) { wfUserList = []; }
+  return wfUserList;
+}
+function wfUserNovoId() { return 'usr-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+/* Salva o grafo atual como Workflow. Nome repetido (sem diferenciar maiúsculas)
+   substitui o registro anterior — o diálogo confirma antes de chamar. */
+async function wfUsuarioSalvar(nome, desc) {
+  await wfUserReload();   // garante a lista fresca mesmo sem abrir a aba Workflows antes
+  const tpl = wfGraphToTemplate(JSON.parse(serialize()));
+  const chave = (nome || '').trim().toLowerCase();
+  const existente = wfUserList.find(w => ((w.nome || '').trim().toLowerCase()) === chave);
+  const agora = Date.now();
+  const rec = { id: existente ? existente.id : wfUserNovoId(), nome: nome, desc: desc || '', nos: tpl.nos, liga: tpl.liga, created: existente ? (existente.created || agora) : agora, updated: agora };
+  if (tpl.wireCurve) rec.wireCurve = tpl.wireCurve;
+  await SS_DB.putWorkflow(rec);
+  await wfUserReload();
+  return rec;
+}
+async function wfUserOverwrite(id) {
+  const w = wfUserList.find(x => x.id === id);
+  if (!w) return;
+  if (!nodes.size) return setStatus('Nada no editor para atualizar o workflow.', true);
+  if (!window.confirm('Substituir o workflow “' + (w.nome || 'Sem nome') + '” pelo grafo aberto agora no editor?')) return;
+  try {
+    const tpl = wfGraphToTemplate(JSON.parse(serialize()));
+    const rec = { ...w, nos: tpl.nos, liga: tpl.liga, updated: Date.now() };
+    if (tpl.wireCurve) rec.wireCurve = tpl.wireCurve;
+    await SS_DB.putWorkflow(rec);
+    await wfUserReload();
+    wfRepintaSeAberta();
+    setStatus('Workflow atualizado: ' + (w.nome || 'Sem nome'));
+  } catch (e) { setStatus('Não consegui atualizar o workflow neste aparelho.', true); }
+}
+async function wfUserDelete(id) {
+  const w = wfUserList.find(x => x.id === id);
+  if (!w) return;
+  if (!window.confirm('Excluir o workflow salvo “' + (w.nome || 'Sem nome') + '”?')) return;
+  try {
+    await SS_DB.delWorkflow(id);
+    await wfUserReload();
+    wfRepintaSeAberta();
+    setStatus('Workflow excluído: ' + (w.nome || 'Sem nome'));
+  } catch (e) { setStatus('Não consegui excluir o workflow neste aparelho.', true); }
+}
+/* Se a tela de Workflows estiver aberta, repinta com a lista atual. */
+function wfRepintaSeAberta() {
+  if (!document.getElementById('wfScr')) return;
+  const busca = document.getElementById('wfBusca'), chips = document.getElementById('wfChips'), lista = document.getElementById('wfLista'), qtd = document.getElementById('wfQtd');
+  if (busca && chips && lista && qtd) wfPinta(busca.value, wfFiltro, chips, lista, qtd);
+}
 
 /* =========================================================
    2.9.95: Assets — the user's personal library (Libraries style)
@@ -34413,6 +34533,179 @@ function saveGraphFile() {
   });
 }
 
+/* =========================================================
+   Ctrl+S: "Onde salvar este Graph?" (destino do save)
+   O Ctrl+S/Cmd+S NÃO salva direto: pergunta o destino — "Salvar em Workflows"
+   (template reutilizável na aba Workflows) ou "Salvar Localmente" (o fluxo de
+   sempre, saveGraphFile, sem mudar nada). A caixa "Lembrar minha escolha para
+   este projeto" guarda a preferência SÓ do projeto atual (chave por ssCurId);
+   com preferência válida, o Ctrl+S aplica direto, sem abrir o modal.
+   ========================================================= */
+/* SV_PURO_INI */
+function svPrefKeyDe(projetoId) { return 'everything-editor:save-dest:' + (projetoId || 'rascunho'); }
+function svDestDePref(pref) { return (pref && (pref.dest === 'wf' || pref.dest === 'local')) ? pref.dest : null; }
+/* Converte o grafo serializado (serialize()) para o formato de template dos
+   Workflows: nos[i] = [tipo, x, y, params?, {collapsed, tf}?], liga[i] = [de, para, entrada, saida]. */
+function wfGraphToTemplate(data) {
+  const nosIn = (data && data.nodes) || [];
+  const idx = new Map(nosIn.map((n, i) => [n.id, i]));
+  const copia = v => { try { return JSON.parse(JSON.stringify(v)); } catch (e) { return undefined; } };
+  const nos = nosIn.map(n => {
+    const e2 = [n.type, Math.round(n.x || 0), Math.round(n.y || 0)];
+    const params = n.params ? copia(n.params) : undefined;
+    if (params && Object.keys(params).length) e2[3] = params;
+    const extra = {};
+    if (n.collapsed) extra.collapsed = true;
+    if (n.tf) { const tf = copia(n.tf); if (tf) extra.tf = tf; }
+    if (Object.keys(extra).length) e2[4] = extra;
+    return e2;
+  });
+  const liga = [];
+  for (const l of ((data && data.links) || [])) {
+    if (!idx.has(l.from) || !idx.has(l.to)) continue;
+    liga.push([idx.get(l.from), idx.get(l.to), l.input || 0, l.out || 0]);
+  }
+  return { nos, liga, wireCurve: data && data.wireCurve ? copia(data.wireCurve) : undefined };
+}
+/* SV_PURO_FIM */
+
+function svEstilo() {
+  if (document.getElementById('svCss')) return;
+  const st = document.createElement('style');
+  st.id = 'svCss';
+  st.textContent = [
+    '#svBack .sv-pergunta{font-size:15px;font-weight:600;color:var(--text-strong,#fff);margin:0 0 2px}',
+    '#svBack .sv-atual{font-size:12.5px;color:#9aa3b0;margin-bottom:12px}',
+    '#svBack .sv-opt{display:flex;gap:11px;width:100%;text-align:left;align-items:flex-start;background:var(--panel2,#232830);border:1px solid var(--line,#333);border-radius:10px;padding:12px;margin:0 0 9px;cursor:pointer;color:var(--text,#e7ebf0)}',
+    '#svBack .sv-opt:hover{border-color:var(--brand,#4b8bff)}',
+    '#svBack .sv-opt.sv-prim{border-color:var(--accent,#3f6fd8);background:rgba(63,111,216,.14)}',
+    '#svBack .sv-ico{font-size:20px;line-height:1.25}',
+    '#svBack .sv-txt{display:block;min-width:0}',
+    '#svBack .sv-opt-t{display:block;font-weight:700;font-size:14.5px;color:var(--text-strong,#fff)}',
+    '#svBack .sv-opt-d{display:block;font-size:12.5px;color:#9aa3b0;margin-top:2px;line-height:1.35}',
+    '#svBack .sv-lembrar{display:flex;align-items:center;gap:8px;margin:12px 0 2px;cursor:pointer;font-size:13px;color:#c8cfd8}',
+    '#svBack input.sv-chk{width:auto;accent-color:var(--accent,#3f6fd8)}',
+  ].join('\n');
+  document.head.append(st);
+}
+function svFecharBack() { const b = document.getElementById('svBack'); if (b) b.remove(); }
+function svEscolhaLembrada() {
+  try { return svDestDePref(JSON.parse(localStorage.getItem(svPrefKeyDe(ssCurId)) || 'null')); } catch (e) { return null; }
+}
+function svLembrar(dest) {
+  try { localStorage.setItem(svPrefKeyDe(ssCurId), JSON.stringify({ dest, quando: Date.now() })); } catch (e) {}
+}
+/* Ponto de entrada do Ctrl+S/Cmd+S no editor de grafos. */
+function svGraphCtrlS(e) {
+  if (e) e.preventDefault();
+  if (!nodes.size) return setStatus('Nothing to save.', true);
+  const dest = svEscolhaLembrada();
+  if (dest === 'local') return saveGraphFile();          // comportamento de hoje, intacto
+  if (dest === 'wf') return svSalvarWorkflowDialog();
+  svDestinoDialog();
+}
+function svDestinoDialog() {
+  svEstilo();
+  svFecharBack();
+  const back = E('div', 'xdlg-back'); back.id = 'svBack';
+  const box = E('div', 'xdlg'); box.style.width = 'min(440px,100%)';
+  box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true');
+  box.append(E('h3', '', 'Salvar Graph'));
+  box.append(E('div', 'sv-pergunta', 'Onde salvar este Graph?'));
+  box.append(E('div', 'sv-atual', 'Grafo atual: ' + (ssCurName || 'Sem título')));
+  const lembra = document.createElement('input');
+  lembra.type = 'checkbox'; lembra.className = 'sv-chk';
+  const opt = (prim, ico, tit, desc, dest) => {
+    const b = E('button', 'sv-opt' + (prim ? ' sv-prim' : ''));
+    b.type = 'button';
+    const tx = E('span', 'sv-txt');
+    tx.append(E('span', 'sv-opt-t', tit), E('span', 'sv-opt-d', desc));
+    b.append(E('span', 'sv-ico', ico), tx);
+    b.addEventListener('click', () => {
+      const quer = lembra.checked;
+      fechar();
+      if (quer) svLembrar(dest);
+      if (dest === 'wf') svSalvarWorkflowDialog(); else saveGraphFile();
+    });
+    return b;
+  };
+  box.append(opt(true, '📁', 'Salvar em Workflows', 'Salvar como template reutilizável, aparece na sua aba de Workflows', 'wf'));
+  box.append(opt(false, '⬇', 'Salvar Localmente', 'Salvar só neste projeto, como já acontece hoje', 'local'));
+  const lLembra = E('label', 'sv-lembrar');
+  lLembra.append(lembra, document.createTextNode('Lembrar minha escolha para este projeto'));
+  box.append(lLembra);
+  const acoes = E('div', 'xbtns');
+  const bCanc = E('button', '', 'Cancelar'); bCanc.type = 'button';
+  bCanc.addEventListener('click', () => fechar());
+  acoes.append(bCanc);
+  box.append(acoes);
+  back.append(box);
+  document.body.append(back);
+  function fechar() {
+    back.remove();
+    document.removeEventListener('keydown', onKey, true);
+    if (closeDialogFn === fechar) closeDialogFn = null;
+  }
+  function onKey(ev) { if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); fechar(); } }
+  document.addEventListener('keydown', onKey, true);
+  back.addEventListener('mousedown', ev => { if (ev.target === back) fechar(); });
+  closeDialogFn = fechar;
+}
+function svSalvarWorkflowDialog() {
+  svEstilo();
+  svFecharBack();
+  const back = E('div', 'xdlg-back'); back.id = 'svBack';
+  const box = E('div', 'xdlg'); box.style.width = 'min(440px,100%)';
+  box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true');
+  box.append(E('h3', '', 'Salvar em Workflows'));
+  const sug = (ssCurName && ssCurName !== 'Untitled project') ? ssCurName : 'Meu workflow';
+  const inNome = document.createElement('input');
+  inNome.type = 'text'; inNome.value = sug; inNome.maxLength = 80;
+  inNome.autocomplete = 'off'; inNome.spellcheck = false;
+  const inDesc = document.createElement('input');
+  inDesc.type = 'text'; inDesc.placeholder = 'Ex.: retrato com grão e vinheta'; inDesc.maxLength = 140;
+  inDesc.autocomplete = 'off'; inDesc.spellcheck = false;
+  box.append(E('label', '', 'Nome do workflow'), inNome, E('label', '', 'Descrição (opcional)'), inDesc);
+  const acoes = E('div', 'xbtns');
+  const bCanc = E('button', '', 'Cancelar'); bCanc.type = 'button';
+  const bOk = E('button', 'primary', 'Salvar workflow'); bOk.type = 'button';
+  acoes.append(bCanc, bOk);
+  box.append(acoes);
+  back.append(box);
+  document.body.append(back);
+  let salvando = false;
+  function fechar() {
+    back.remove();
+    document.removeEventListener('keydown', onKey, true);
+    if (closeDialogFn === fechar) closeDialogFn = null;
+  }
+  function salvar() {
+    if (salvando) return;
+    salvando = true;
+    const nome = inNome.value.trim() || sug;
+    const desc = inDesc.value.trim();
+    wfUserReload().then(() => {
+      const dup = wfUserList.find(w => ((w.nome || '').trim().toLowerCase()) === nome.toLowerCase());
+      if (dup && !window.confirm('Já existe um workflow chamado “' + nome + '”. Substituir pelo grafo atual?')) { salvando = false; return; }
+      fechar();
+      wfUsuarioSalvar(nome, desc).then(rec => {
+        setStatus('Workflow salvo: ' + rec.nome + ' — abra a aba Workflows para reutilizar.');
+        wfRepintaSeAberta();
+      }).catch(() => setStatus('Não consegui salvar o workflow neste aparelho.', true));
+    }).catch(() => { salvando = false; });
+  }
+  function onKey(ev) {
+    if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); fechar(); }
+    else if (ev.key === 'Enter') { ev.preventDefault(); ev.stopPropagation(); salvar(); }
+  }
+  document.addEventListener('keydown', onKey, true);
+  bCanc.addEventListener('click', () => fechar());
+  bOk.addEventListener('click', salvar);
+  back.addEventListener('mousedown', ev => { if (ev.target === back) fechar(); });
+  closeDialogFn = fechar;
+  setTimeout(() => { try { inNome.focus(); inNome.select(); } catch (e) {} }, 0);
+}
+
 async function loadGraphFile(file) {
   const data = JSON.parse(await file.text());
   await loadGraphData(data);
@@ -35028,7 +35321,7 @@ window.addEventListener('keydown', e => {
   if (mod && k === 'd') { e.preventDefault(); duplicateSelected(); return; }
   if (mod && k === 'a') { e.preventDefault(); selectAll(); return; }
   if (mod && e.shiftKey && k === 's') { e.preventDefault(); ssSaveNow(); return; }
-  if (mod && k === 's') { e.preventDefault(); saveGraphFile(); return; }
+  if (mod && k === 's') { svGraphCtrlS(e); return; }   /* pergunta o destino; "Salvar Localmente" = saveGraphFile de sempre */
   if (mod && k === 'o') { e.preventDefault(); openImageDialog(); return; }
   if (mod && k === 'x') { if (cutSelected()) e.preventDefault(); return; }
   if (mod && k === 'c') { if (copySelected()) e.preventDefault(); return; }
@@ -35141,7 +35434,7 @@ const SS_DB = (() => {
   /* Lojas exigidas. Se o banco do usuário foi criado por uma versão antiga sem
      alguma delas (era o caso de "assetFolders"), a importação por pastas falhava
      inteira; agora o banco se conserta sozinho com uma versão a mais. */
-  const LOJAS = { meta: { keyPath: 'id' }, data: null, folders: { keyPath: 'id' }, assetFolders: { keyPath: 'id' }, assets: { keyPath: 'id' } };
+  const LOJAS = { meta: { keyPath: 'id' }, data: null, folders: { keyPath: 'id' }, assetFolders: { keyPath: 'id' }, assets: { keyPath: 'id' }, workflows: { keyPath: 'id' } };
   const criaLojas = db => { for (const nome in LOJAS) if (!db.objectStoreNames.contains(nome)) db.createObjectStore(nome, LOJAS[nome] || undefined); };
   const open = () => p || (p = new Promise((res, rej) => {
     const etapa = (versao, tentativas) => {
@@ -35185,13 +35478,14 @@ const SS_DB = (() => {
       return { meta: await tudo('meta'), data: await tudo('data'),
                dataKeys: await run('data', 'readonly', s => s.getAllKeys()),
                folders: await tudo('folders'), assetFolders: await tudo('assetFolders'),
-               assets: await tudo('assets') };
+               assets: await tudo('assets'), workflows: await tudo('workflows') };
     },
     async restore(pack) {
       const metas = pack.meta || [], chaves = pack.dataKeys || [], dados = pack.data || [];
       for (const f of pack.folders || []) if (f && f.id != null) await run('folders', 'readwrite', s => s.put(f));
       for (const f of pack.assetFolders || []) if (f && f.id != null) await run('assetFolders', 'readwrite', s => s.put(f));
       for (const a of pack.assets || []) if (a && a.id != null) await run('assets', 'readwrite', s => s.put(a));
+      for (const w of pack.workflows || []) if (w && w.id != null) await run('workflows', 'readwrite', s => s.put(w));
       for (let i = 0; i < dados.length; i++) {
         const k = chaves[i] !== undefined ? chaves[i] : (metas[i] || {}).id;
         if (k != null) await run('data', 'readwrite', s => s.put(dados[i], k));
@@ -35199,6 +35493,11 @@ const SS_DB = (() => {
       for (const m of metas) if (m && m.id != null) await run('meta', 'readwrite', s => s.put(m));
     },
     list: () => run('meta', 'readonly', s => s.getAll()),
+    /* Workflows salvos pelo usuário (Ctrl+S → "Salvar em Workflows") */
+    listWorkflows: () => run('workflows', 'readonly', s => s.getAll()),
+    getWorkflow: id => run('workflows', 'readonly', s => s.get(id)),
+    putWorkflow: w => run('workflows', 'readwrite', s => s.put(w)),
+    delWorkflow: id => run('workflows', 'readwrite', s => s.delete(id)),
     getMeta: id => run('meta', 'readonly', s => s.get(id)),
     listFolders: () => run('folders', 'readonly', s => s.getAll()),
     putFolder: folder => run('folders', 'readwrite', s => s.put(folder)),
@@ -40172,6 +40471,78 @@ ld');
 </html>
 ns('view-preview')) return click('mGoGraph');
       return false;
+    } catch (e) { return false; }
+  };
+})();
+</script>
+
+</body>
+</html>
+urn false;
+    } catch (e) { return false; }
+  };
+})();
+</script>
+
+</body>
+</html>
+;
+    P[nome] = function (id) {
+      try { return orig.call(this, id); } catch (e) { return padrao; }
+    };
+  }
+  guarda('setPointerCapture');
+  guarda('releasePointerCapture');
+  guarda('hasPointerCapture', false);
+})();
+</script>
+<script id="ee-android-bridge">
+/* ---- Android shell bridge (used only inside the APK) ---- */
+(function () {
+  var isApp = !!(window.AndroidSave || (window.AndroidBridge && window.AndroidBridge.isApp && window.AndroidBridge.isApp()));
+  if (isApp) document.documentElement.classList.add('ee-app');
+
+  function click(id) { var el = document.getElementById(id); if (el) { try { el.click(); } catch (e) {} return true; } return false; }
+
+  /* The physical Back button calls this. It closes the top-most overlay and
+     returns true when it handled the press, so the app stays open. */
+  window.__eeAndroidBack = function () {
+    try {
+      var ss = document.getElementById('ssScr');
+      if (ss && !ss.hidden) return click('ssClose');
+      var sh = document.getElementById('mSheet');
+      if (sh && !sh.hidden) return click('mSheetClose');
+      var bm = document.getElementById('brandMenu');
+      if (bm && bm.classList.contains('open')) return click('brandBtn');
+      var am = document.getElementById('addMenu');
+      if (am && !am.hidden) { am.hidden = true; return true; }
+      var gm = document.getElementById('grpMenu');
+      if (gm && !gm.hidden) { gm.hidden = true; return true; }
+      var tm = document.getElementById('tlMenu');
+      if (tm && !tm.hidden) { tm.hidden = true; return true; }
+      var dlg = document.querySelector('.tldlgback');
+      if (dlg) { var b = dlg.querySelector('.tldlgbtn'); if (b) { b.click(); return true; } }
+      var md = document.getElementById('maskDlg');
+      if (md && !md.hidden) return true;              /* painting: Finish/Cancel decides */
+      if (document.body.classList.contains('view-preview')) return click('mGoGraph');
+      return false;
+    } catch (e) { return false; }
+  };
+})();
+</script>
+
+</body>
+</html>
+ns('view-preview')) return click('mGoGraph');
+      return false;
+    } catch (e) { return false; }
+  };
+})();
+</script>
+
+</body>
+</html>
+urn false;
     } catch (e) { return false; }
   };
 })();
