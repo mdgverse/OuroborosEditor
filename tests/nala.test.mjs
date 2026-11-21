@@ -18,14 +18,21 @@ const SEC = (key, label, tip, closed) => ({ type: 'sec', key, label, tip, closed
 console.log('Nala · base, busca e prompt');
 
 const puro = new Function(extrai('/* NALA_PURO_INI', '/* NALA_PURO_FIM */') +
-  '; return { NALA_MODELO, nalaTokens, nalaBuscar, nalaSystemPrompt };')();
-const { NALA_MODELO, nalaBuscar, nalaSystemPrompt } = puro;
+  '; return { NALA_MODELO, nalaTokens, nalaBuscar, nalaSystemPrompt, nalaClassificar };')();
+const { NALA_MODELO, nalaBuscar, nalaSystemPrompt, nalaClassificar } = puro;
 
 ok(NALA_MODELO.nome === 'Qwen2.5-0.5B-Instruct' && NALA_MODELO.licenca === 'Apache-2.0', 'modelo escolhido: Qwen2.5-0.5B-Instruct (Apache-2.0)');
 ok(NALA_MODELO.downloadMB === 512 && /huggingface\.co/.test(NALA_MODELO.fonte), 'download ~512 MB da fonte oficial');
 const prompt = nalaSystemPrompt(['## Blur Studio\nborra imagens']);
-ok(/Nala/.test(prompt) && /nunca invente/i.test(prompt) && /NÃO controla o editor/.test(prompt), 'prompt: identidade, honestidade e sem prometer controle do editor');
+ok(/Nala/.test(prompt) && /NUNCA invente/.test(prompt) && /NÃO controla o editor/.test(prompt), 'prompt: identidade, honestidade e sem prometer controle do editor');
 ok(prompt.includes('Blur Studio'), 'prompt injeta o contexto recuperado (RAG)');
+// 1.12.2 — personalidade: resposta primeiro, simples, 1 pergunta se ambíguo
+ok(/Responda à pergunta PRIMEIRO/.test(prompt), 'personalidade: responde primeiro, direto');
+ok(/Linguagem simples/.test(prompt) && /explique-o em poucas palavras/.test(prompt), 'personalidade: simples, termo técnico explicado curto');
+ok(/UMA pergunta curta de esclarecimento/.test(prompt), 'personalidade: ambíguo = 1 pergunta de esclarecimento');
+ok(/idioma do usuário/.test(prompt) && /português brasileiro/.test(prompt), 'personalidade: acompanha o idioma (PT-BR)');
+ok(/sem exagero/.test(prompt) && /emojis em excesso/.test(prompt), 'personalidade: encoraja sem exagero de emojis/desculpas');
+ok(/Só aprofunde detalhes técnicos/.test(prompt) && /pedir explicitamente/.test(prompt), 'personalidade: detalhe técnico só a pedido');
 
 // docs de nós a partir do registro real (mesma regra do app: título/params)
 const ntBloco = extrai('const NODE_TYPES = {', '\n};\n');
@@ -42,6 +49,12 @@ ok(nalaBuscar(docs, 'como borrar uma imagem', 2)[0].titulo === 'Blur Studio', 'b
 ok(nalaBuscar(docs, 'rastrear manchas', 2)[0].titulo === 'Blob Tracker', 'busca PT: "rastrear manchas" acha o Blob Tracker');
 ok(nalaBuscar(docs, 'adicionar um nó novo', 2)[0].id === 'adicionar', 'busca PT: adicionar nó');
 ok(nalaBuscar(docs, 'receita de bolo de cenoura', 2).length === 0, 'fora do editor: sem resultado (não inventa)');
+ok(nalaClassificar(docs, 'blur studio radius').tipo === 'ok', 'classificação: pergunta clara = ok');
+ok(nalaClassificar(docs, 'e isso ai').tipo === 'fraco', 'classificação: pergunta vaga = pede esclarecimento');
+ok(/classe\.tipo === 'fraco'/.test(html) && /pode me dar um pouco mais de detalhe\?/.test(html), 'resposta fraca vira 1 pergunta de esclarecimento');
+ok(/Parâmetros principais: \$\{params\.slice\(0, 6\)/.test(html), 'nó: no máx. 6 parâmetros por padrão (conciso)');
+ok(/detalhado = \/detalh/.test(html), 'detalhe completo só quando o usuário pede');
+ok(/Node Adder com Shift\+A/.test(html) && /modo Wheel/.test(html) && /modo Gallery/.test(html), 'fluxo de adicionar usa os nomes reais (Node Adder/Wheel/Gallery)');
 
 console.log('Nala · UI, privacidade e modelo opcional');
 ok(/id = 'nalaBtn'/.test(html) && /Abrir a Nala/.test(html), 'botão de entrada da Nala com aria-label');
@@ -64,5 +77,14 @@ ok(!/api[_-]?key|API_KEY|sk-[a-z0-9]/i.test(extrai('/* NALA_PURO_INI', '/* -----
 ok(/selected/.test(extrai('function nalaContexto()', '/* ---------- UI')) && /nodes\.get/.test(extrai('function nalaContexto()', '/* ---------- UI')), 'contexto usa a seleção real do grafo');
 ok(fs.existsSync(new URL('../assets/nala/README.md', import.meta.url)), 'assets/nala/README.md documenta o slot da arte');
 ok(fs.existsSync(new URL('../docs/nala.md', import.meta.url)), 'docs/nala.md com viabilidade e limites');
+
+console.log('Nala · ícone mobile sem sobrepor o menu');
+ok(/@media \(max-width: 820px\)\{[\s\S]*?#nalaBtn\{width:48px/.test(html), 'mobile: botão menor (48px) no canto');
+ok(/env\(safe-area-inset-bottom,0px\)/.test(html), 'mobile: respeita a safe-area do aparelho');
+ok(/function nalaReposicionar\(\)/.test(html) && /tlPanel/.test(extrai('function nalaReposicionar()', 'let nalaDocsCache')), 'reposiciona medindo a altura real da timeline');
+ok(/getBoundingClientRect\(\)\.height/.test(html) && /Math\.max\(56, Math\.round\(tlH\) \+ 12\)/.test(html), 'fica acima da timeline (altura real + 12px, mín. 56)');
+ok(/ResizeObserver/.test(html) && /addEventListener\('resize', nalaReposicionar\)/.test(html), 'reage a resize/dobrar a timeline');
+ok(/orientation:landscape/.test(html), 'landscape tem ajuste próprio');
+ok(/#nalaBtn\{position:fixed;right:14px/.test(html), 'desktop: posição original preservada');
 
 resumo('nala');

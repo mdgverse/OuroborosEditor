@@ -72,6 +72,20 @@ Não verificado/não prometido: a Nala **não** executa ações no editor
 (sem criar/mover/apagar nós), não tem voz/microfone na v1 ("ouvindo" =
 campo focado) e o modo generativo não foi executado neste ambiente.
 
+## 3b. Personalidade e ícone mobile (1.12.2)
+
+- **Personalidade:** prompt e modo local seguem a mesma regra —
+  responde primeiro e curto, linguagem simples, passos com nomes reais
+  (Node Adder, Wheel/Gallery, Shift+A), termo técnico explicado em
+  poucas palavras, **uma** pergunta de esclarecimento quando a busca é
+  fraca/ambígua (`nalaClassificar`), nós mostram no máximo 6 parâmetros
+  (lista completa só com "detalhes"), idioma do usuário (PT-BR padrão),
+  sem emojis/desculpas em excesso e sem inventar nada.
+- **Ícone no mobile:** em telas ≤820px o botão encolhe (48px; 44px em
+  landscape) e flutua **acima da timeline**, com `nalaReposicionar()`
+  medindo a altura real do `#tlPanel` (ResizeObserver + MutationObserver
+  + resize) + `env(safe-area-inset-bottom)`. Desktop inalterado.
+
 ## 4. Arquivos adicionados/alterados
 
 - `index.html` — CSS `#nala-css`, bloco Nala (UI, base, busca, Worker

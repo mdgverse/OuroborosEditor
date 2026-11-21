@@ -248,6 +248,19 @@ body:not(.mobile) .m-nav, body:not(.mobile) .m-sheet, body:not(.mobile) .m-toast
 .nala-form button{background:#c9a86a;color:#191407;border:0;border-radius:9px;padding:8px 13px;font-weight:700;cursor:pointer}
 .nala-form button.parar{background:#5a2b2b;color:#ffd7d7}
 @media (prefers-reduced-motion: reduce){#nalaBtn .nala-avatar::after{animation:none!important}.nala-barra i{transition:none!important}}
+/* Mobile (1.12.2): o ícone flutua ACIMA da timeline (nunca sobre o menu nem
+   os controles), com safe-area; o JS ajusta pela altura real da timeline. */
+#nalaBtn{bottom:calc(16px + env(safe-area-inset-bottom,0px))}
+@media (max-width: 820px){
+  #nalaBtn{width:48px;height:48px;right:10px;bottom:calc(150px + env(safe-area-inset-bottom,0px))}
+  #nalaBtn .nala-avatar{width:38px;height:38px}
+  #nalaPanel{left:8px;right:8px;width:auto;height:min(54dvh,540px);bottom:calc(206px + env(safe-area-inset-bottom,0px))}
+}
+@media (max-width: 820px) and (orientation:landscape){
+  #nalaBtn{width:44px;height:44px}
+  #nalaBtn .nala-avatar{width:34px;height:34px}
+  #nalaPanel{height:min(74dvh,540px)}
+}
 </style>
 <style id="ee-touch-css">/* ===== Dedo no aparelho (portado da referência) ===== */
 html, body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent}/* 1) alvos pequenos do nó: o dedo não acerta 12 px */
@@ -529,7 +542,7 @@ html, body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent}/* 1
 
 /* Versão do editor — o arquivo VERSION na raiz é a fonte da verdade
    (o build do APK usa o mesmo número no versionName e falha se divergir). */
-const APP_VERSION = '1.12.1';
+const APP_VERSION = '1.12.2';
 /* tooltip do botão da marca: só o nome do produto (a versão é metadado, não entra na marca) */
 {
   const marca = document.getElementById('brandBtn');
@@ -39731,20 +39744,35 @@ startScreenOpen();
   }
   function nalaSystemPrompt(blocos) {
     return [
-      'Você é a Nala, assistente especialista do Ouroboros Editor (editor de imagens/vídeo por nós, Web e Android).',
-      'Responda em português brasileiro, de forma direta e prática, com passos numerados quando explicar um fluxo.',
-      'Use SOMENTE o contexto abaixo e o que sabe do editor. Se algo não estiver no contexto, diga que não tem essa informação — nunca invente controles, nós ou recursos.',
+      'Você é a Nala, assistente especialista do Ouroboros Editor (editor de imagens/vídeo por nós, Web e Android). Você é acolhedora, natural e segura — uma colega que conhece o editor a fundo.',
+      'Estilo obrigatório:',
+      '1. Responda à pergunta PRIMEIRO, de forma direta e curta; depois, só o complemento mais relevante.',
+      '2. Linguagem simples do dia a dia, sem juridiquês técnico. Se um termo técnico for necessário, explique-o em poucas palavras.',
+      '3. Para fluxos do editor, dê passos curtos e práticos com os nomes reais de botões, menus, nós e controles (ex.: Node Adder, modos Wheel e Gallery, Shift+A).',
+      '4. Fale no idioma do usuário; conversa em português = português brasileiro.',
+      '5. Se a pergunta for ambígua, faça UMA pergunta curta de esclarecimento em vez de adivinhar.',
+      '6. Se algo não estiver no contexto, diga honestamente que não consegue verificar e sugira um próximo passo útil. NUNCA invente controles, nós ou recursos.',
+      '7. Seja encorajadora sem exagero: nada de saudações repetidas, desculpas constantes ou emojis em excesso.',
+      '8. Só aprofunde detalhes técnicos (listas completas de parâmetros, arquitetura) se o usuário pedir explicitamente.',
       'Você NÃO controla o editor: não afirme que clicou, criou ou alterou nós. Apenas oriente o usuário.',
-      'Contexto verificado do editor:',
+      'Use SOMENTE o contexto verificado abaixo:',
       (blocos && blocos.length ? blocos.join('\n---\n') : '(sem contexto recuperado)'),
     ].join('\n');
+  }
+  /* Classifica a confiança da busca: 'fraco' = melhor pedir esclarecimento. */
+  function nalaClassificar(docs, consulta) {
+    const toks = nalaTokens(consulta);
+    for (const t of [...toks]) for (const s of (NALA_SINONIMOS[t] || [])) toks.add(s);
+    let melhor = 0, doc = null;
+    for (const d of docs) { const p = nalaPontuar(d, toks); if (p > melhor) { melhor = p; doc = d; } }
+    return { tipo: melhor >= 3 ? 'ok' : 'fraco', pontos: melhor, doc };
   }
   /* NALA_PURO_FIM */
 
   /* Tópicos curados — atualizar junto com a interface (docs/nala.md). */
   const NALA_TOPICOS = [
     { id: 'home', titulo: 'Home, projetos e pastas', tags: ['inicio', 'home', 'projeto', 'pasta', 'folder', 'abrir', 'salvar projeto', 'sessao'], corpo: 'A Home lista projetos e pastas. Projetos e a última sessão são guardados no próprio aparelho/navegador (localStorage). Pastas organizam projetos; a pasta aberta espalha os projetos em fileiras rolantes (1.5.0). Há Backup/Restore para exportar projetos, pastas e Assets num .json.', passos: ['Na Home, toque num projeto para abrir ou crie um novo.', 'Use pastas para agrupar; arraste/organize pela Home.', 'Faça Backup pelo menu quando quiser uma cópia fora do aparelho.'] },
-    { id: 'adicionar', titulo: 'Adicionar nós (Shift+A)', tags: ['adicionar', 'novo no', 'add', 'shift+a', 'wheel', 'circulo', 'categoria', 'lista', 'menu radial'], corpo: 'Shift+A (ou o botão Add) abre o círculo de categorias (Wheel). Escolher uma categoria abre a lista de nós dela; a seta volta ao círculo. Também há busca por nome e palavras-chave (o campo kw de cada nó).', passos: ['Pressione Shift+A onde quer criar o nó.', 'Escolha a categoria no círculo.', 'Clique no nó na lista — ele nasce no ponto clicado.'] },
+    { id: 'adicionar', titulo: 'Adicionar nós (Shift+A)', tags: ['adicionar', 'novo no', 'add', 'shift+a', 'wheel', 'gallery', 'circulo', 'categoria', 'lista', 'menu radial', 'node adder'], corpo: 'Abra o Node Adder com Shift+A (ou o botão Add), escolha o nó que deseja e ele entra no gráfico no ponto clicado. Você pode usar o modo Wheel (o círculo de categorias) ou o modo Gallery (a lista de nós da categoria, com busca por nome).', passos: ['Pressione Shift+A onde quer criar o nó.', 'No Wheel, escolha a categoria — ou busque pelo nome.', 'Clique no nó na Gallery para adicionar.'] },
     { id: 'ligar', titulo: 'Ligar nós e sockets', tags: ['ligar', 'conectar', 'fio', 'wire', 'socket', 'entrada', 'saida', 'link', 'cabo'], corpo: 'Cada nó tem sockets de entrada (esquerda) e a saída (direita). Arraste de um socket ao outro para ligar. Alt+arrastar sobre fios faz zip tie (corta). O Output/Preview mostra o resultado da cadeia; um nó sem entrada de imagem pode usar a fonte automática quando o tipo permite.', passos: ['Arraste da saída de um nó até a entrada do próximo.', 'Solte sobre o socket para confirmar a ligação.', 'Use Del para apagar nós/fios selecionados.'] },
     { id: 'parametros', titulo: 'Parâmetros e inspetor', tags: ['parametro', 'slider', 'controle', 'inspetor', 'ajustar', 'painel do no'], corpo: 'Os controles ficam no corpo/painel do nó. Vários nós mostram só os parâmetros do modo escolhido (ex.: Blur Studio e Glass Studio). Valores são guardados no projeto; controles escondidos pelo modo atual mantêm o valor salvo. Sliders numéricos aceitam ajuste fino; a prévia atualiza ao mudar.', passos: ['Selecione o nó para ver os controles.', 'Mude o modo/tipo primeiro — os parâmetros relevantes aparecem.', 'Ajuste e observe a prévia do Output.'] },
     { id: 'imagem', titulo: 'Imagem, GIF, vídeo e Assets', tags: ['imagem', 'video', 'gif', 'importar', 'foto', 'asset', 'midia', 'abrir arquivo'], corpo: 'O nó Image aceita imagem, GIF e vídeo ("Open image, GIF or video…"), com resolução máxima configurável (1024/2048/4096 px). Assets podem ser importados e organizados em pastas; GIFs/vídeos alimentam a Timeline. A análise de nós de vídeo usa quadros do clipe.', passos: ['Adicione um nó Image e escolha o arquivo.', 'Ajuste a resolução máxima se precisar de mais detalhe.', 'Ligue a saída do Image aos efeitos e ao Output.'] },
@@ -39842,6 +39870,25 @@ startScreenOpen();
   panel.append(head, msgs, cfg, form);
   document.body.append(btn, panel);
 
+  /* Mobile: mantém o botão acima da timeline (altura real, muda com
+     dobrar/esconder) e longe da área de gestos do sistema. */
+  function nalaReposicionar() {
+    if (window.innerWidth > 820) { btn.style.bottom = ''; panel.style.bottom = ''; return; }
+    let tlH = 0;
+    const tl = document.getElementById('tlPanel');
+    if (tl && !tl.classList.contains('hidden')) tlH = tl.getBoundingClientRect().height || 0;
+    const base = Math.max(56, Math.round(tlH) + 12);
+    btn.style.bottom = base + 'px';
+    panel.style.bottom = (base + 56) + 'px';
+  }
+  window.addEventListener('resize', nalaReposicionar);
+  try {
+    const tlObs = document.getElementById('tlPanel');
+    if (tlObs && window.ResizeObserver) new ResizeObserver(() => nalaReposicionar()).observe(tlObs);
+    if (tlObs && window.MutationObserver) new MutationObserver(() => nalaReposicionar()).observe(tlObs, { attributes: true, attributeFilter: ['class', 'style'] });
+  } catch (e) { /* sem observers: vale o CSS */ }
+  nalaReposicionar();
+
   let nalaDocsCache = null;
   const nalaDocs = () => nalaDocsCache || (nalaDocsCache = [...NALA_TOPICOS, ...nalaDocsNos()]);
   /* Arte oficial por estado (1.12.1): listening reutiliza o idle. */
@@ -39859,7 +39906,7 @@ startScreenOpen();
   }
   function abrir() {
     panel.hidden = false; setEstado('listening'); input.focus();
-    if (!msgs.childElementCount) addMsg('nala', 'Oi! Eu sou a Nala, assistente do Ouroboros Editor. Pergunte sobre nós, parâmetros ou fluxos — ex.: "como funciona o Blur Studio?" ou "o que o Blob Tracker faz?". Respondo com a base local, sem enviar nada para fora.');
+    if (!msgs.childElementCount) addMsg('nala', 'Oi! Sou a Nala. Pergunte o que quiser sobre o editor — por exemplo: "como adiciono um nó?" ou "o que o Blob Tracker faz?".');
   }
   function fechar() { panel.hidden = true; setEstado('idle'); btn.focus(); }
   btn.addEventListener('click', () => (panel.hidden ? abrir() : fechar()));
@@ -39868,18 +39915,32 @@ startScreenOpen();
   input.addEventListener('focus', () => { if (btn.dataset.state === 'idle') setEstado('listening'); });
   ctxChk.addEventListener('change', () => { try { localStorage.setItem('ouroboros:nala:ctx', ctxChk.checked ? '1' : '0'); } catch (e) {} });
 
-  /* ---------- respostas da base local ---------- */
+  /* ---------- respostas da base local (concisas, resposta primeiro) ---------- */
   function responderKB(pergunta) {
-    const achados = nalaBuscar(nalaDocs(), pergunta, 4);
-    if (!achados.length) {
-      return 'Não encontrei isso na minha base verificada do editor — prefiro não inventar. Tente perguntar pelo nome do nó (ex.: "Glass Studio") ou pelo que quer fazer (ex.: "borrar só o fundo").';
+    const docs = nalaDocs();
+    const detalhado = /detalh|todos|complet|t[ée]cnic|par[âa]metros|arquitetur/i.test(pergunta);
+    const classe = nalaClassificar(docs, pergunta);
+    if (classe.tipo === 'fraco') {
+      const sugestoes = nalaBuscar(docs, pergunta, 3).map(d => d.titulo);
+      return 'Quero te responder certo — pode me dar um pouco mais de detalhe?' +
+        (sugestoes.length ? `\nVocê quis dizer algo sobre: ${sugestoes.join(', ')}?` : '\nMe diga o nome do nó ou o que você quer fazer (ex.: "borrar só o fundo").');
     }
+    const achados = nalaBuscar(docs, pergunta, 4);
     const [top, ...resto] = achados;
-    let out = top.corpo;
-    const docTop = NALA_TOPICOS.find(t => t.id === top.id);
-    if (docTop && docTop.passos && docTop.passos.length) out += '\n\nPasso a passo:\n' + docTop.passos.map((p, i) => `${i + 1}. ${p}`).join('\n');
-    const relacionados = resto.filter(d => d.noId).map(d => d.titulo);
-    if (relacionados.length) out += `\n\nNós relacionados: ${relacionados.join(', ')}.`;
+    let out;
+    if (top.noId && !detalhado) {
+      // nó: resposta curta — o que é + parâmetros principais (máx. 6)
+      const [desc, paramsTxt] = top.corpo.split('Parâmetros:');
+      const params = (paramsTxt || '').split(';').map(s => s.trim()).filter(Boolean);
+      out = desc.trim();
+      if (params.length) out += `\n\nParâmetros principais: ${params.slice(0, 6).join('; ')}.` + (params.length > 6 ? `\n(E mais ${params.length - 6} — peça "detalhes" se quiser todos.)` : '');
+    } else {
+      out = top.corpo;
+      const docTop = NALA_TOPICOS.find(t => t.id === top.id);
+      if (docTop && docTop.passos && docTop.passos.length) out += '\n\nPasso a passo:\n' + docTop.passos.map((p, i) => `${i + 1}. ${p}`).join('\n');
+    }
+    const relacionados = resto.filter(d => d.noId).map(d => d.titulo).slice(0, 3);
+    if (relacionados.length) out += `\n\nRelacionados: ${relacionados.join(', ')}.`;
     return out;
   }
 
