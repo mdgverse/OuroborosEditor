@@ -109,6 +109,8 @@ jobs:
         run: node tests/blur-kinetic.test.mjs
       - name: Nala (base de conhecimento, busca PT, privacidade e modelo opcional)
         run: node tests/nala.test.mjs
+      - name: Ctrl+S (modal de destino) + Workflows do usuário
+        run: node tests/save-destination.test.mjs
       - name: Versão (VERSION = index.html = APK)
         run: node tests/version.test.mjs
       - name: Higiene (código morto, CSS sem uso, reference/ fora)
