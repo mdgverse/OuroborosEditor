@@ -18,8 +18,8 @@ const SEC = (key, label, tip, closed) => ({ type: 'sec', key, label, tip, closed
 console.log('Nala · base, busca e prompt');
 
 const puro = new Function(extrai('/* NALA_PURO_INI', '/* NALA_PURO_FIM */') +
-  '; return { NALA_MODELO, nalaTokens, nalaBuscar, nalaSystemPrompt, nalaClassificar };')();
-const { NALA_MODELO, nalaBuscar, nalaSystemPrompt, nalaClassificar } = puro;
+  '; return { NALA_MODELO, nalaTokens, nalaBuscar, nalaSystemPrompt, nalaClassificar, nalaIntencao };')();
+const { NALA_MODELO, nalaBuscar, nalaSystemPrompt, nalaClassificar, nalaIntencao } = puro;
 
 ok(NALA_MODELO.nome === 'Qwen2.5-0.5B-Instruct' && NALA_MODELO.licenca === 'Apache-2.0', 'modelo escolhido: Qwen2.5-0.5B-Instruct (Apache-2.0)');
 ok(NALA_MODELO.downloadMB === 512 && /huggingface\.co/.test(NALA_MODELO.fonte), 'download ~512 MB da fonte oficial');
@@ -69,7 +69,7 @@ for (const st of ['idle', 'listening', 'thinking', 'responding', 'error'])
   ok(html.includes(`data-state="${st}"`) || html.includes(`nalaBtn[data-state="${st}"]`) || html.includes(`'${st}'`), `estado do avatar: ${st}`);
 ok(/prefers-reduced-motion: reduce/.test(html.slice(html.indexOf('nala-css'))), 'animações respeitam prefers-reduced-motion');
 ok(/localStorage\.getItem\('ouroboros:nala:ctx'\) === '1'/.test(html), 'contexto da tela: desligado por padrão (só com consentimento)');
-ok(/ctxChk\.checked \? nalaContexto\(\) : null/.test(html), 'contexto só é lido com o consentimento ligado');
+ok(/\(ctxChk\.checked \|\| querGrafo\) \? nalaContexto\(\) : null/.test(html), 'contexto: automático só com consentimento; fora isso, só quando o usuário pergunta do próprio grafo (1.13.1)');
 ok(/window\.confirm\(/.test(html) && /~' \+ NALA_MODELO\.downloadMB|downloadMB/.test(html), 'download do modelo pede confirmação com o tamanho');
 ok(/onnx-community\/Qwen2\.5-0\.5B-Instruct/.test(html), 'repositório oficial do modelo no Worker');
 ok(/nalaWorker\.terminate\(\)/.test(html), 'Parar encerra o Worker (cancelamento real)');
@@ -77,6 +77,49 @@ ok(!/api[_-]?key|API_KEY|sk-[a-z0-9]/i.test(extrai('/* NALA_PURO_INI', '/* -----
 ok(/selected/.test(extrai('function nalaContexto()', '/* ---------- UI')) && /nodes\.get/.test(extrai('function nalaContexto()', '/* ---------- UI')), 'contexto usa a seleção real do grafo');
 ok(fs.existsSync(new URL('../assets/nala/README.md', import.meta.url)), 'assets/nala/README.md documenta o slot da arte');
 ok(fs.existsSync(new URL('../docs/nala.md', import.meta.url)), 'docs/nala.md com viabilidade e limites');
+
+console.log('Nala · 1.13.1 conversa limpa (intenção, sem despejo técnico)');
+ok(typeof nalaIntencao === 'function', 'nalaIntencao existe no bloco puro');
+ok(nalaIntencao('Oi') === 'saudacao' && nalaIntencao('Bom dia') === 'saudacao' && nalaIntencao('boa noite!') === 'saudacao' && nalaIntencao('Oi, tudo bem?') === 'saudacao', 'cumprimentos reconhecidos');
+ok(nalaIntencao('oi, como adiciono um nó?') === null && nalaIntencao('o que o Grain faz?') === null, 'pergunta de verdade não vira cumprimento');
+ok(nalaIntencao('quantos nós tem meu grafo?') === 'grafo' && nalaIntencao('quantas ligações tenho?') === 'grafo', 'pergunta sobre o próprio grafo detectada');
+ok(nalaIntencao('qual modelo você usa?') === 'modelo' && nalaIntencao('que modelo é esse?') === 'modelo', 'pergunta sobre o modelo detectada');
+
+/* responderKB de verdade, com docs mínimos no lugar da base real */
+const kbSrc = extrai('function responderKB(pergunta) {', '/* ---------- modelo generativo opcional');
+const kbDocs = [
+  { id: 'adicionar', titulo: 'Adicionar nós (Shift+A)', tags: ['adicionar', 'shift+a', 'node adder'], corpo: 'Abra o Node Adder com Shift+A e escolha o nó.', passos: [] },
+  { id: 'no:grain', noId: 'grain', titulo: 'Grain', tags: ['grain', 'Grain', 'Texture'], corpo: 'Nó Grain (categoria Texture). Entradas: image. Saída: imagem processada (ou conforme o tipo). Parâmetros: Amount (amount, 0–100, padrão 20); Size (size, 1–10, padrão 2).' },
+];
+const responderKB = new Function('nalaDocs', 'NALA_TOPICOS', 'nalaClassificar', 'nalaBuscar', 'NALA_MODELO', 'nalaIntencao',
+  kbSrc + '; return responderKB;')(() => kbDocs, [], nalaClassificar, nalaBuscar, NALA_MODELO, nalaIntencao);
+
+const rOi = responderKB('Oi');
+ok(rOi === 'Oi! Como posso ajudar você?', '"Oi" → cumprimento curto e direto', rOi);
+ok(responderKB('Bom dia') === rOi && !/Grafo atual|Qwen|512/.test(rOi), '"Bom dia" idem: sem estatística, sem modelo, sem metadado');
+const rNo = responderKB('o que o Grain faz?');
+ok(/Nó Grain/.test(rNo) && /Parâmetros principais/.test(rNo), 'pergunta de nó → resposta do nó');
+ok(!/Grafo atual/.test(rNo) && !/ligaç(ão|ões)/.test(rNo), 'resposta de nó não despeja estatísticas do grafo');
+const rMod = responderKB('qual modelo você usa?');
+ok(/Qwen2\.5-0\.5B-Instruct/.test(rMod) && /512 MB/.test(rMod) && /Apache-2\.0/.test(rMod), 'modelo: a informação técnica aparece quando pedida');
+ok(!/Grafo atual/.test(rMod), 'resposta de modelo não despeja estatísticas do grafo');
+
+const prompt2 = nalaSystemPrompt(['## Contexto atual (interno — não repetir ao usuário)\nGrafo atual: 9 nó(s), 8 ligação(ões).']);
+ok(/cumpriment/.test(prompt2) && /não os repita/.test(prompt2) && /Nunca despeje dados técnicos/.test(prompt2), 'prompt do generativo: cumprimento breve + nunca repetir contexto/estatísticas');
+ok(!html.includes('(${ctxTxt})'), 'contexto NÃO é mais colado na frente da resposta (causa do bug)');
+ok(/intencao === 'saudacao'/.test(html) && /intencao === 'modelo'/.test(html), 'envio: cumprimento/modelo respondem direto nos dois modos');
+ok(/## Contexto atual \(interno — não repetir ao usuário\)/.test(html), 'bloco de contexto do modelo marcado como interno');
+ok(/querGrafo/.test(html) && /intencao === 'grafo'/.test(html), 'pergunta de grafo tem caminho próprio (contexto só quando pedido)');
+ok(!/Modelo local pronto\. Continuo respondendo/.test(html), 'sem mensagem técnica automática ao ativar o modelo');
+ok(/addMsg\('erro', 'O modelo local falhou: '/.test(html), 'erros importantes continuam visíveis no chat');
+
+console.log('Nala · 1.13.1 interface (conversa limpa, técnica no ⚙)');
+ok(/cfg\.id = 'nalaCfg'; cfg\.hidden = true/.test(html), 'configurações nascem fechadas');
+ok(/panel\.append\(head, cfg, msgs, form\)/.test(html), 'configurações fora do fluxo visível da conversa');
+ok(/Configurações da Nala/.test(html) && /btnCfg\.addEventListener\('click'/.test(html) && /cfg\.hidden = !cfg\.hidden/.test(html), 'botão ⚙ abre/fecha "Configurações da Nala"');
+ok(/nomeBox\.append\(\$el\('div', 'nala-nome', 'Nala'\)\)/.test(html), 'cabeçalho só com o nome (sem status técnico)');
+ok(/Sobre a Nala:/.test(html) && /modelo generativo opcional é o/.test(html), '"Sobre a Nala" mora nas configurações, com modelo/tamanho/licença');
+ok(/#nalaCfg|\.nala-config\[hidden\]\{display:none\}/.test(html), 'painel oculto não ocupa a conversa');
 
 console.log('Nala · ícone mobile sem sobrepor o menu');
 ok(/@media \(max-width: 820px\)\{[\s\S]*?#nalaBtn\{width:48px/.test(html), 'mobile: botão menor (48px) no canto');

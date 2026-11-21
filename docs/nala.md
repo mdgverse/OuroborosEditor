@@ -120,3 +120,40 @@ campo focado) e o modo generativo não foi executado neste ambiente.
   para o Hugging Face) e teste em aparelho Android físico. Primeira
   validação sugerida: abrir a Nala no site publicado, ativar o modelo
   com Wi-Fi e perguntar "como funciona o Blur Studio?".
+
+## 7. Conversa limpa (1.13.1)
+
+Correção a partir de uma captura real: ao mandar "Oi", a Nala despejava
+estatísticas do grafo e texto técnico na conversa. Causas: (a) com o
+contexto da tela ligado, o texto bruto do contexto era **colado antes de
+toda resposta** da base local; (b) não havia noção de **cumprimento** —
+"Oi" caía na busca genérica e, no modo generativo, recebia os blocos de
+contexto e divagava.
+
+O que mudou:
+
+- **Intenções especiais** (`nalaIntencao`, bloco puro): `saudacao`,
+  `modelo` e `grafo` são detectadas antes da busca. Cumprimento responde
+  "Oi! Como posso ajudar você?" — nos dois modos (nem o Worker é
+  acordado). "Qual modelo você usa?" responde curto com nome/licença/
+  tamanho. Perguntar do próprio grafo é o único caminho que mostra as
+  estatísticas — porque foi pedido.
+- **Contexto é interno, nunca colado:** o fallback não prefixa mais a
+  resposta com o contexto; no generativo, o bloco vai marcado como
+  "interno — não repetir ao usuário" e o prompt (regras 9–11) proíbe
+  despejar contagens, nó selecionado, modelo/licença/tamanho ou detalhes
+  da base sem pedido explícito. O contexto automático continua atrás do
+  consentimento (⚙).
+- **Interface:** a conversa principal tem só avatar, nome, mensagens,
+  campo, Enviar e fechar. Contexto da tela, status, download/ativação do
+  modelo, progresso e o "Sobre a Nala" moram no painel **⚙ Configurações
+  da Nala**, fechado por padrão. O consentimento e a confirmação com o
+  tamanho do download (~512 MB) continuam como estavam; erros relevantes
+  continuam aparecendo no chat, mas o "modelo pronto" não insere mais
+  mensagem técnica automática.
+- **Testes:** `tests/nala.test.mjs` executa o `responderKB` real (com
+  docs mínimos) para "Oi", "Bom dia", pergunta de nó e "qual modelo?";
+  confere o classificador de intenção, o prompt e a nova interface. O
+  modo generativo continua **não executado neste ambiente** (Hugging
+  Face inacessível): o comportamento dele é garantido pelo mesmo atalho
+  determinístico de intenções + regras do prompt, a validar no aparelho.
