@@ -1,4 +1,4 @@
-/* Nala (1.12.0): base de conhecimento gerada do registro real de nós,
+/* Nala (1.12.0; arte oficial 1.12.1): base de conhecimento gerada do registro real de nós,
    busca PT, prompt honesto, UI/estados, consentimento e o modelo opcional
    (download explícito — nunca embutido nem silencioso). */
 import fs from 'node:fs';
@@ -46,7 +46,12 @@ ok(nalaBuscar(docs, 'receita de bolo de cenoura', 2).length === 0, 'fora do edit
 console.log('Nala · UI, privacidade e modelo opcional');
 ok(/id = 'nalaBtn'/.test(html) && /Abrir a Nala/.test(html), 'botão de entrada da Nala com aria-label');
 ok(/nalaPanel/.test(html) && /setAttribute\('role', 'dialog'\)/.test(html), 'painel de conversa acessível');
-ok(/assets\/nala\/nala-idle\.png/.test(html), 'slot da arte final (assets/nala/nala-idle.png) com fallback');
+ok(/assets\/nala\/nala-idle\.webp/.test(html), 'arte oficial conectada (assets/nala/nala-idle.webp)');
+for (const arq of ['nala-idle.webp', 'nala-thinking.webp', 'nala-responding.webp', 'nala-error.webp'])
+  ok(fs.existsSync(new URL('../assets/nala/' + arq, import.meta.url)), 'avatar presente: ' + arq);
+ok(/NALA_AVATARES = \{ idle: 'nala-idle\.webp', listening: 'nala-idle\.webp', thinking: 'nala-thinking\.webp', responding: 'nala-responding\.webp', error: 'nala-error\.webp' \}/.test(html),
+  'mapa de avatares por estado (listening reusa o idle)');
+ok(/im\.src = arq/.test(html), 'setEstado troca a imagem do avatar junto com o anel');
 for (const st of ['idle', 'listening', 'thinking', 'responding', 'error'])
   ok(html.includes(`data-state="${st}"`) || html.includes(`nalaBtn[data-state="${st}"]`) || html.includes(`'${st}'`), `estado do avatar: ${st}`);
 ok(/prefers-reduced-motion: reduce/.test(html.slice(html.indexOf('nala-css'))), 'animações respeitam prefers-reduced-motion');

@@ -529,7 +529,7 @@ html, body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent}/* 1
 
 /* Versão do editor — o arquivo VERSION na raiz é a fonte da verdade
    (o build do APK usa o mesmo número no versionName e falha se divergir). */
-const APP_VERSION = '1.12.0';
+const APP_VERSION = '1.12.1';
 /* tooltip do botão da marca: só o nome do produto (a versão é metadado, não entra na marca) */
 {
   const marca = document.getElementById('brandBtn');
@@ -39806,7 +39806,7 @@ startScreenOpen();
   const avatarHTML = () => {
     const a = $el('span', 'nala-avatar');
     const img = $el('img');
-    img.alt = ''; img.src = 'assets/nala/nala-idle.png';   // slot da arte final (docs/nala.md)
+    img.alt = ''; img.src = 'assets/nala/nala-idle.webp';   // arte oficial da Nala (assets/nala/)
     img.onerror = () => img.remove();
     const letra = $el('span', 'nala-letra', 'N');
     a.append(img, letra);
@@ -39844,7 +39844,14 @@ startScreenOpen();
 
   let nalaDocsCache = null;
   const nalaDocs = () => nalaDocsCache || (nalaDocsCache = [...NALA_TOPICOS, ...nalaDocsNos()]);
-  const setEstado = s => { btn.dataset.state = s; };
+  /* Arte oficial por estado (1.12.1): listening reutiliza o idle. */
+  const NALA_AVATARES = { idle: 'nala-idle.webp', listening: 'nala-idle.webp', thinking: 'nala-thinking.webp', responding: 'nala-responding.webp', error: 'nala-error.webp' };
+  const setEstado = s => {
+    btn.dataset.state = s;
+    const arq = 'assets/nala/' + (NALA_AVATARES[s] || 'nala-idle.webp');
+    panel.querySelectorAll('.nala-avatar img').forEach(im => { if (!im.src.endsWith(arq)) im.src = arq; });
+    btn.querySelectorAll('.nala-avatar img').forEach(im => { if (!im.src.endsWith(arq)) im.src = arq; });
+  };
   function addMsg(cls, texto) {
     const m = $el('div', 'nala-msg ' + cls, texto);
     msgs.append(m); msgs.scrollTop = msgs.scrollHeight;

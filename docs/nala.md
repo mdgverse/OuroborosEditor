@@ -89,8 +89,11 @@ campo focado) e o modo generativo não foi executado neste ambiente.
   (cancelamento real) e descarrega o modelo.
 - **Trocar o modelo:** ajuste `NALA_MODELO` e o `pipeline(...)` no
   bloco Nala do `index.html` (manter licença permissiva e q4).
-- **Arte da personagem:** ver `assets/nala/README.md` — basta soltar
-  `nala-idle.png` 512×512 transparente na pasta; nenhum código muda.
+- **Arte da personagem:** conectada na 1.12.1 a partir das imagens-base
+  do usuário — avatares de rosto 512×512 em WebP em `assets/nala/`
+  (idle/thinking/responding/error; listening reusa o idle). Para
+  trocar, substitua o arquivo mantendo o nome (ver
+  `assets/nala/README.md`); nenhum código muda.
 
 ## 6. Testes (reais, neste ambiente)
 
