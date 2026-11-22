@@ -96,3 +96,29 @@ casca (movimentação de elementos reais, pending de inserção, persistência).
   insertNodeInLink/evalNode/removeNode reais — 4 imagens coladas nos
   slots 1–4 (Layer 2–5), efeito só na camada da 3ª imagem, edição de
   parâmetro, bypass, exclusão reconectando e expansão até a Layer 7.
+
+## 1.18.0 — conexão interativa pelos sockets de saída
+
+- Clicar no **socket de saída real** de um nó (no painel de propriedades),
+  no botão **●** de qualquer item do fluxo/Todos os nós ou em
+  **➜ Conectar saída…** abre o painel flutuante `#itConnPanel`.
+- **Nó existente**: lista TODOS os nós do projeto (não só os visíveis no
+  fluxo — a mesma liberdade de ligar no Mask (brush)), com cada entrada
+  identificada: livre, multi (aceita vários), ocupada (avisa que vai
+  substituir), incompatível ou loop — as duas últimas bloqueadas.
+  Layer Position/Perspective Warp lotados oferecem criar a entrada nova.
+- **Nó novo**: tipos compatíveis por categoria, com a mesma busca
+  tolerante do menu Add (`buscaCasa`) e as mesmas indisponibilidades
+  (`addIndisponivel`); escolher cria o nó ao lado da fonte e liga na
+  entrada preferida compatível.
+- **Tipos de dado** derivados dos rótulos do próprio editor
+  (`itSocketTipo`/`itIndicesCompativeis`, puros e testados): Palette e
+  Audio são dados próprios; o resto é imagem. Tudo termina no
+  `connect()` real — loop, multi-in, expansão de camadas e dirty
+  seguem as regras do Node Editor; cancelar (Esc/clique fora/✕) não
+  toca no grafo; conectar fecha o painel e foca o destino.
+- Testes executam as funções reais: tipos, índices com preferIn,
+  conectar existente (incl. Palette → socket Palette mudando a
+  avaliação), criar+conectar novo, recusa de incompatível sem deixar
+  nó órfão, multi-in preservando as duas fontes, loop recusado e
+  cancelar sem efeito.

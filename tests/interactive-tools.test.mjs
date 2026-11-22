@@ -157,6 +157,87 @@ return { nodes, createNode, connect, linkTo, evalNode, removeNode, insertNodeInL
   ok(B.linksDe().filter(l => l.to === lp.id).length === 6, 'nenhuma camada foi sobrescrita');
 }
 
+/* ---------- 6c. conexão interativa pela saída (funções reais) ---------- */
+{
+  const nomesC = ['itSocketTipo', 'itIndicesCompativeis', 'itRotuloSaida', 'itTemSaida', 'itTitulo', 'itFecharConexao', 'itConectarExistente', 'itConectarNovoTipo', 'itBypassValor', 'bypassResult', 'nodeInputs', 'linkTo', 'reachable', 'isMultiIn', 'connect', 'removeLink', 'evalNode', 'evalSource', 'removeNode'];
+  const codigoC = `
+let links = []; const nodes = new Map(); const selected = new Set(); let previewId = null; let FX_FAST = false;
+let IT = { conn: null };
+let __id = 200;
+const NODE_TYPES = {
+  fill: { title: 'Fill', inputs: [], params: [], outs: ['Image'] },
+  palette: { title: 'Palette', inputs: [], params: [], outs: ['Palette'] },
+  paletteRemap: { title: 'Palette Remap', inputs: ['Image', 'Palette', 'Mask'], params: [] },
+  brightness: { title: 'Brightness', inputs: ['Image'], params: [] },
+  maskBlend: { title: 'Mask (brush)', inputs: ['Original', 'Effect', 'Mask'], preferIn: 1, multi: [1], params: [] },
+  audioSrc: { title: 'Audio', inputs: [], params: [], outs: ['Wave (image)', 'Audio'] },
+  audioEq: { title: 'Audio EQ', inputs: ['Audio'], params: [], outs: ['Audio'] },
+  output: { title: 'Output', inputs: ['Image'], params: [] },
+};
+const RUN = {
+  fill: () => 'IMG', palette: () => 'PAL',
+  paletteRemap: (n, ins) => (ins[0] || 'vazio') + '<' + (ins[1] || 'sem-paleta') + '>',
+  brightness: (n, ins) => ins[0] + '|fx',
+  maskBlend: (n, ins) => 'mask[' + (Array.isArray(ins[1]) ? ins[1].length : (ins[1] ? 1 : 0)) + ']',
+  output: (n, ins) => ins[0],
+};
+function setStatus() {} function refreshMaskHints() {} function audAposMudarLinks() {}
+function releaseNode() {} function tlNodeRemoved() {} function pruneGroups() {}
+function drawLinks() {} function commit() {} function requestRender() {}
+function itEl() { return null; } function itFocus() {}
+function markDirty(id) { const st = [id], seen = new Set(); while (st.length) { const c = st.pop(); if (seen.has(c)) continue; seen.add(c); const n = nodes.get(c); if (n) n.dirty = true; for (const l of links) if (l.from === c) st.push(l.to); } }
+function fxPodeSolto() { return false; } function fxFastParams() { return null; } function fxTrackFull() {} function animApply(n, r) { return r; }
+function createNode(type, x, y) { const n = { id: ++__id, type, x: x || 0, y: y || 0, params: {}, dirty: true, cache: undefined, cacheFast: false, runtime: {}, ui: {}, el: { style: {}, remove() {} }, bypass: false }; nodes.set(n.id, n); return n; }
+${nomesC.map(fnSrc).join('\n')}
+return { nodes, createNode, connect, linkTo, evalNode, itSocketTipo, itIndicesCompativeis, itTemSaida, itConectarExistente, itConectarNovoTipo, itFecharConexao, setConn: c => { IT.conn = c; }, getConn: () => IT.conn, linksDe: () => links };
+`;
+  const C = new Function(codigoC)();
+
+  ok(C.itSocketTipo('Palette') === 'palette' && C.itSocketTipo('Audio') === 'audio', 'tipos de socket: Palette e Audio são dados próprios');
+  ok(C.itSocketTipo('Wave (image)') === 'image' && C.itSocketTipo('Layer 2') === 'image' && C.itSocketTipo('Mask') === 'image', 'todo o resto carrega imagem');
+  ok(JSON.stringify(C.itIndicesCompativeis('Palette', ['Image', 'Palette', 'Mask'])) === '[1]', 'saída Palette só entra no socket Palette');
+  ok(JSON.stringify(C.itIndicesCompativeis('Image', ['Original', 'Effect', 'Mask'], 1)) === '[1,0,2]', 'entrada preferida (Effect do Mask) vem primeiro');
+  ok(C.itIndicesCompativeis('Audio', ['Image']).length === 0, 'Audio não entra em socket de imagem');
+
+  const fill = C.createNode('fill'), pal = C.createNode('palette'), remap = C.createNode('paletteRemap'), out = C.createNode('output');
+  C.setConn({ fromId: fill.id, outIdx: 0 });
+  ok(C.itConectarExistente(remap.id, 0) === true, 'conectar a nó EXISTENTE: Fill → Palette Remap (Image)');
+  C.setConn({ fromId: remap.id, outIdx: 0 });
+  ok(C.itConectarExistente(out.id, 0) === true, 'conectar a nó EXISTENTE: Palette Remap → Output');
+  ok(C.evalNode(out.id) === 'IMG<sem-paleta>', 'fluxo avalia até o Output');
+  C.setConn({ fromId: pal.id, outIdx: 0 });
+  ok(C.itConectarExistente(remap.id, 1) === true, 'conectar Palette → socket Palette do Remap');
+  ok(C.evalNode(out.id) === 'IMG<PAL>', 'a paleta chega de verdade (prévia muda)');
+  ok(C.getConn() === null, 'painel fecha após conectar com sucesso');
+
+  C.setConn({ fromId: fill.id, outIdx: 0 });
+  ok(C.itConectarNovoTipo('brightness') === true, 'conectar a nó NOVO: cria e liga');
+  const bn = [...C.nodes.values()].find(n => n.type === 'brightness');
+  ok(bn && C.linkTo(bn.id, 0) && C.linkTo(bn.id, 0).from === fill.id, 'o nó novo nasceu ligado à saída original');
+  ok(C.evalNode(bn.id) === 'IMG|fx', 'o nó novo processa o fluxo');
+
+  const antes = C.nodes.size;
+  C.setConn({ fromId: fill.id, outIdx: 0 });
+  ok(C.itConectarNovoTipo('audioEq') === false && C.nodes.size === antes, 'tipo incompatível (Audio em saída Image) é recusado e nada fica criado');
+
+  const mask = C.createNode('maskBlend');
+  C.setConn({ fromId: fill.id, outIdx: 0 }); C.itConectarExistente(mask.id, 1);
+  C.setConn({ fromId: bn.id, outIdx: 0 }); C.itConectarExistente(mask.id, 1);
+  ok(C.linksDe().filter(l => l.to === mask.id && l.input === 1).length === 2, 'entrada multi (Effect do Mask) preserva as duas conexões');
+  ok(C.evalNode(mask.id) === 'mask[2]', 'as duas fontes alimentam o Mask de verdade');
+
+  const b1 = C.createNode('brightness'), b2 = C.createNode('brightness');
+  C.connect(b1.id, b2.id, 0);
+  const totalLinks = C.linksDe().length;
+  C.setConn({ fromId: b2.id, outIdx: 0 });
+  ok(C.itConectarExistente(b1.id, 0) === false && C.linksDe().length === totalLinks, 'conexão que criaria loop é recusada sem tocar no grafo');
+
+  C.setConn({ fromId: fill.id, outIdx: 0 });
+  C.itFecharConexao();
+  ok(C.getConn() === null && C.linksDe().length === totalLinks, 'cancelar fecha o painel sem modificar o grafo');
+  ok(C.itTemSaida(out) === false && C.itTemSaida(fill) === true, 'Output não oferece socket de saída; fontes oferecem');
+}
+
 /* ---------- 7. integração da casca no HTML ---------- */
 {
   ok(html.includes('id="itView"') && html.includes('id="itFlow"') && html.includes('id="itPropsHost"') && html.includes('id="itStageHost"'), 'layout da casca: fluxo, palco e propriedades');
@@ -181,6 +262,16 @@ return { nodes, createNode, connect, linkTo, evalNode, removeNode, insertNodeInL
   ok(html.includes('id="itLayersCtx"') && html.includes('id="itFxLayer"'), 'seção de camadas contextuais na interface');
   ok(html.includes('function itLayersRender()') && html.includes('layerRotulo(lp, i)'), 'lista usa os rótulos reais do Layer Position');
   ok(html.includes('cadeia desta camada'), 'a cadeia de efeitos da camada selecionada é exibida com bypass');
+  /* 1.18.0: conexão interativa pela saída */
+  ok(html.includes('id="itConnPanel"'), 'painel flutuante de conexão existe');
+  ok(html.includes('function itAbrirConexao(') && html.includes('function itConectarExistente(') && html.includes('function itConectarNovoTipo('), 'abrir/conectar existente/conectar novo implementados');
+  ok(html.includes('itAbrirConexao(n.id, +s.dataset.idx'), 'o socket de saída REAL do nó (no painel) abre a conexão');
+  ok(html.includes('Conectar a um nó existente') && html.includes('Criar e conectar um nó novo'), 'painel diferencia existentes de novos');
+  ok(html.includes('it-conn-search') && html.includes('buscaCasa(q, t, d, cat)'), 'busca por nome reutiliza a busca tolerante do menu Add');
+  ok(html.includes('criaria um loop') && html.includes('incompatível ('), 'incompatíveis e loops são indicados e bloqueados');
+  ok(html.includes('ocupada — substitui'), 'entrada ocupada avisa antes de substituir (preserva quando possível)');
+  ok(html.includes('➜ Conectar saída…'), 'botão Conectar saída no painel de propriedades');
+  ok(html.includes('if (e.key === \'Escape\' && IT.conn) itFecharConexao()'), 'Esc cancela o painel sem tocar no grafo');
   const setMode = html.slice(html.indexOf('function itSetMode('), html.indexOf('function itAjuda()'));
   ok(!/location\.reload/.test(setMode), 'trocar de modo não recarrega a página');
   ok(setMode.includes("nv.style.display = 'none'") && setMode.includes("nv.style.display = ''"), 'trocar de modo só esconde/mostra e move elementos reais');
