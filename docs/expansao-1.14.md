@@ -183,3 +183,12 @@ rótulos em uma única linha com reticências (nome completo no tooltip da
 célula), título de uma linha e botão ▾/▸ para recolher a grade (estado só
 de interface, por nó, fora dos dados do projeto). Geometria, ids e
 comportamento de seleção não mudaram.
+
+## 7. Correção crítica 1.15.0 — Interactive Tools como casca
+
+A implementação 1.14 do Interactive Tools (editor raster paralelo) foi
+removida por decisão do usuário. A 1.15 o reestrutura como wrapper sobre
+o editor convencional: mesmos nós/controles/menu Add/prévia (elementos
+reais movidos, não clonados), inserção de efeitos no meio dos links pelos
+mecanismos do editor e bypass por nó avaliado no evalNode. Detalhes em
+docs/interactive-tools.md.

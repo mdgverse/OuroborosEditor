@@ -1,79 +1,116 @@
-/* Interactive Tools (1.14.0) — segundo ambiente: camadas, ferramentas com
-   prévia/confirmação, histórico próprio, integração com o grafo e troca de
-   modo sem recarregar, com a preferência de UI fora dos dados do projeto. */
+/* Interactive Tools 1.15.0 — casca sobre o editor convencional.
+   Além das asserções de integração, este teste EXECUTA as funções reais do
+   index.html (connect, insertNodeInLink, evalNode com bypass, removeNode)
+   sobre um grafo de mentira: criar, conectar, inserir efeito no meio do
+   link, editar parâmetro, bypass liga/desliga e excluir reconectando. */
 import fs from 'node:fs';
 import { ok, resumo } from './kit.mjs';
 
 const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-const trecho = (ini, fim) => {
-  const a = html.indexOf(ini);
-  const b = html.indexOf(fim, a + 1);
-  if (a < 0 || b < 0) throw new Error('trecho não encontrado: ' + ini);
-  return html.slice(a, b);
+const fnSrc = nome => {
+  const i = html.indexOf('function ' + nome + '(');
+  if (i < 0) throw new Error('função não encontrada: ' + nome);
+  const fins = ['\nfunction ', '\nlet ', '\nconst ', '\n/* ==='].map(m => html.indexOf(m, i + 10)).filter(x => x > 0);
+  return html.slice(i, Math.min(...fins));
 };
 
-/* ---------- 1. bloco puro executado ---------- */
+/* ---------- 1. harness com as funções reais ---------- */
+const nomes = ['itEscolheEntrada', 'itCadeia', 'itBypassValor', 'bypassResult', 'nodeInputs', 'linkTo', 'reachable', 'isMultiIn', 'connect', 'removeLink', 'canInsertNode', 'insertNodeInLink', 'evalNode', 'evalSource', 'removeNode'];
+const codigo = `
+let links = []; const nodes = new Map(); const selected = new Set(); let previewId = null; let FX_FAST = false;
+const NODE_TYPES = {
+  fill: { title: 'Fill', inputs: [], params: [] },
+  brightness: { title: 'Brightness', inputs: ['Image'], params: [] },
+  invert: { title: 'Invert', inputs: ['Image'], params: [] },
+  output: { title: 'Output', inputs: ['Image'], params: [] },
+};
+const RUN = {
+  fill: () => 'IMG',
+  brightness: (n, ins) => ins[0] + '|brilho' + n.params.amount,
+  invert: (n, ins) => ins[0] + '|inv',
+  output: (n, ins) => ins[0],
+};
+function setStatus() {} function refreshMaskHints() {} function audAposMudarLinks() {}
+function releaseNode() {} function tlNodeRemoved() {} function pruneGroups() {}
+function markDirty(id) { const st = [id], seen = new Set(); while (st.length) { const c = st.pop(); if (seen.has(c)) continue; seen.add(c); const n = nodes.get(c); if (n) n.dirty = true; for (const l of links) if (l.from === c) st.push(l.to); } }
+function fxPodeSolto() { return false; } function fxFastParams() { return null; } function fxTrackFull() {} function animApply(n, r) { return r; }
+${nomes.map(fnSrc).join('\n')}
+function mk(id, type, params) { const n = { id, type, x: 0, y: 0, params: params || {}, dirty: true, cache: undefined, cacheFast: false, runtime: {}, ui: {}, el: null, bypass: false }; nodes.set(id, n); return n; }
+return { nodes, mk, connect, removeLink, linkTo, insertNodeInLink, canInsertNode, evalNode, itCadeia, itBypassValor, removeNode, markDirty, linksDe: () => links };
+`;
+const A = new Function(codigo)();
+
+/* ---------- 2. criar nós e conectar (o fluxo convencional) ---------- */
 {
-  const puro = trecho('/* IT_PURO_INI */', '/* IT_PURO_FIM */');
-  const F = new Function(puro + '\nreturn { IT_BLENDS, itBlendOp, itNovaCamada, itClampNum };')();
-  ok(F.IT_BLENDS.length === 11, '11 blend modes');
-  ok(F.itBlendOp('multiply') === 'multiply' && F.itBlendOp('???') === 'source-over', 'blend → globalCompositeOperation, com reserva');
-  const l = F.itNovaCamada(7, 'text');
-  ok(l.id === 7 && l.kind === 'text' && l.visible && l.opacity === 100 && l.blend === 'normal', 'camada nova nasce com padrões sãos');
-  ok(F.itClampNum('x', 0, 10, 5) === 5 && F.itClampNum(99, 0, 10, 5) === 10, 'clamp numérico');
+  A.mk(1, 'fill'); A.mk(2, 'output');
+  ok(A.connect(1, 2, 0) === true, 'connect liga Fill → Output');
+  ok(A.evalNode(2) === 'IMG', 'avaliação chega ao Output');
+  ok(JSON.stringify(A.itCadeia(A.linksDe(), 2, () => 0)) === '[1,2]', 'cadeia do fluxo: [Fill, Output]');
 }
 
-/* ---------- 2. interface do ambiente ---------- */
+/* ---------- 3. inserir efeito no meio do link ---------- */
 {
-  ok(html.includes('id="itView"'), 'seção do ambiente existe no layout');
-  for (const t of ['move', 'brush', 'eraser', 'fill', 'picker', 'shape', 'text'])
-    ok(html.includes('data-tool="' + t + '"'), 'ferramenta ' + t);
-  ok(html.includes('id="itCanvas"'), 'canvas central');
-  ok(html.includes('id="itLayers"'), 'painel de camadas');
-  ok(html.includes('id="itProps"'), 'painel de propriedades contextual');
-  ok(html.includes('id="itPending"') && html.includes('id="itConfirm"') && html.includes('id="itCancel"'), 'fluxo prévia → confirmar/cancelar');
-  ok(html.includes('id="it-css"'), 'CSS próprio na identidade do editor (variáveis var(--…))');
-  ok(/itAjuda\(\)/.test(html) && html.includes('guia rápido'), 'guia interno do ambiente');
+  A.mk(3, 'brightness', { amount: 50 });
+  ok(A.canInsertNode(A.nodes.get(3)), 'nó livre pode ser inserido');
+  A.insertNodeInLink(3, A.linkTo(2, 0));
+  const ls = A.linksDe();
+  ok(ls.some(l => l.from === 1 && l.to === 3) && ls.some(l => l.from === 3 && l.to === 2) && !ls.some(l => l.from === 1 && l.to === 2),
+    'link original vira Fill → Brightness → Output', ls);
+  ok(A.evalNode(2) === 'IMG|brilho50', 'efeito inserido processa o fluxo de verdade');
+  ok(JSON.stringify(A.itCadeia(A.linksDe(), 2, () => 0)) === '[1,3,2]', 'cadeia: [Fill, Brightness, Output]');
 }
 
-/* ---------- 3. camadas funcionais ---------- */
+/* ---------- 4. editar parâmetro do nó inserido ---------- */
 {
-  for (const f of ['itAddLayer', 'itRenderLayers', 'itRenderProps', 'itCompositeCanvas', 'itRenderProcedural'])
-    ok(html.includes('function ' + f), f + ' existe');
-  ok(html.includes("itAddLayer('group')") || html.includes('itAddLayer("group")') || html.includes("() => itAddLayer('group')"), 'grupos de camadas');
-  ok(html.includes('itBlendOp(l.blend)'), 'blend aplicado no composto');
-  ok(html.includes('grp.opacity'), 'opacidade do grupo afeta os filhos');
-  ok(html.includes("prompt('Nome da camada'"), 'renomear por duplo clique');
-  ok(html.includes('itUpLayer') && html.includes('itDownLayer'), 'reordenar camadas');
-  ok(html.includes("l.name + ' cópia'"), 'duplicar camada');
+  A.nodes.get(3).params.amount = 80;
+  A.markDirty(3);
+  ok(A.evalNode(2) === 'IMG|brilho80', 'parâmetro editado muda o resultado (mesmo nó, mesmos params)');
 }
 
-/* ---------- 4. histórico próprio, com teto ---------- */
+/* ---------- 5. bypass liga/desliga no motor ---------- */
 {
-  ok(html.includes('function itHistPush()') && html.includes('IT.undo.length > 25'), 'histórico próprio com teto de 25 estados');
-  ok(html.includes('function itUndo()') && html.includes('function itRedo()'), 'desfazer/refazer do ambiente');
-  ok(/it-mode'\)\) return;/.test(html) || html.includes("classList.contains('it-mode')"), 'Ctrl+Z roteado ao ambiente quando ele está ativo');
+  const n3 = A.nodes.get(3);
+  n3.bypass = true; A.markDirty(3);
+  ok(A.evalNode(2) === 'IMG', 'bypass ON: o fluxo original passa direto, sem o efeito');
+  ok(A.linksDe().length === 2, 'bypass não remove links nem o nó');
+  n3.bypass = false; A.markDirty(3);
+  ok(A.evalNode(2) === 'IMG|brilho80', 'bypass OFF: o efeito volta a processar');
+  ok(A.itBypassValor({ preferIn: 1 }, ['a', 'b']) === 'b', 'bypass usa a entrada preferida (preferIn)');
+  ok(A.itBypassValor({}, [null, ['x', 'y']]) === 'x', 'bypass cai para a primeira entrada válida');
 }
 
-/* ---------- 5. integração com o grafo (sem motor duplicado) ---------- */
+/* ---------- 6. segundo efeito + excluir reconectando ---------- */
 {
-  ok(html.includes('evalNode(tgt.id)') && html.includes('readResult(res)'), 'importa o resultado do nó em prévia pelos mecanismos do grafo');
-  ok(html.includes('imageStore.set(id, { img, dataUrl: url'), 'composto volta ao imageStore');
-  ok(html.includes("createNode('image', 90, 90, { imgId: id })"), 'composto vira nó Image comum do grafo');
-  ok(html.includes('function cpuRes') === true, 'nós CPU existentes reutilizados (palette/lut)');
+  A.mk(4, 'invert');
+  A.insertNodeInLink(4, A.linkTo(2, 0));
+  ok(A.evalNode(2) === 'IMG|brilho80|inv', 'segundo efeito encadeia no fluxo');
+  A.nodes.get(4).bypass = true; A.markDirty(4);
+  ok(A.evalNode(2) === 'IMG|brilho80', 'bypass só no segundo efeito');
+  A.nodes.get(4).bypass = false; A.markDirty(4);
+  A.removeNode(4);
+  ok(A.evalNode(2) === 'IMG|brilho80' && A.linksDe().some(l => l.from === 3 && l.to === 2), 'excluir o nó reconecta o fluxo (removeNode do editor)');
 }
 
-/* ---------- 6. persistência no projeto + troca de modo ---------- */
+/* ---------- 7. integração da casca no HTML ---------- */
 {
-  ok(html.includes('it: (typeof itSerialize'), 'serialize() grava o ambiente no mesmo projeto');
-  ok(html.includes('function itSerialize()') && html.includes('function itLoad(data)'), 'serializar/restaurar camadas');
-  ok(html.includes('data.it') && html.includes('itLoad(data.it)') , 'restoreGraph restaura as camadas junto');
-  ok(html.includes("localStorage.setItem('ouroboros:ui-mode'"), 'preferência de modo em chave própria (fora do projeto)');
-  ok(html.includes('id="modeNodes"') && html.includes('id="modeTools"'), 'seletor Node Editor ⇄ Interactive Tools na topbar');
-  const setMode = trecho('function itSetMode(modo, silencioso) {', 'function itAjuda()');
-  ok(setMode.includes("nv.style.display = tools ? 'none' : ''"), 'troca só esconde/mostra — não destrói o DOM do grafo');
-  ok(!/location\.reload|restoreGraph\(/.test(setMode), 'troca de modo não recarrega nem reinicializa o projeto');
-  ok(setMode.includes("localStorage.setItem('ouroboros:ui-mode'"), 'troca grava só a preferência de UI');
+  ok(html.includes('id="itView"') && html.includes('id="itFlow"') && html.includes('id="itPropsHost"') && html.includes('id="itStageHost"'), 'layout da casca: fluxo, palco e propriedades');
+  ok(!html.includes('id="itCanvas"') && !html.includes('itCompositeCanvas'), 'o editor raster paralelo da 1.14 saiu');
+  ok(html.includes("n.el.querySelector(':scope > .nbody')") && html.includes('host.append(body)'), 'propriedades hospedam o .nbody REAL do nó (movido, não clonado)');
+  ok(html.includes('itRestauraControles()'), 'ao sair, os controles voltam para o nó no grafo');
+  ok(html.includes("itMoveReal(pv, itEl('itStageHost')"), 'a prévia real (.preview/#gl) é movida para o palco');
+  ok(html.includes('itMoveReal(addMenu, document.body'), 'o menu Add real é reutilizado no ambiente');
+  ok(html.includes('insertTo: restore.to') && html.includes('insertIdx: restore.input'), 'inserir usa o pending de inserção do editor (addNodeAt)');
+  ok(/removeLink\(l\);\s*\n\s*drawLinks\(\); requestRender\(\);\s*\n\s*const r = itEl\('itStageWrap'\)/.test(html), 'o link é removido antes do menu (cancelar restaura, como no arrastar de fio)');
+  ok(html.includes('insertNodeInLink(n.id, l)'), 'nó existente entra no fluxo pela inserção do editor');
+  ok(html.includes("res = n.bypass ? bypassResult(n, ins) : RUN[n.type](n, ins)"), 'evalNode honra o bypass');
+  ok(html.includes('bypass: !!n.bypass') && html.includes('bypass: nd.bypass'), 'bypass persiste no projeto (serialize/restaura)');
+  ok(html.includes("E('button', 'byp'") && html.includes('nodeSetBypass(n, !n.bypass)'), 'botão ⏻ no cabeçalho do nó (vale nos dois ambientes)');
+  ok(html.includes('window.__itCommit'), 'a casca acompanha commits do grafo');
+  ok(html.includes("document.body.classList.contains('it-mode')") && html.includes("itStageWrap') || viewEl"), 'menu Add se posiciona sobre o palco no modo Interactive');
+  ok(html.includes("localStorage.setItem('ouroboros:ui-mode'"), 'preferência de modo continua fora dos dados do projeto');
+  const setMode = html.slice(html.indexOf('function itSetMode('), html.indexOf('function itAjuda()'));
+  ok(!/location\.reload/.test(setMode), 'trocar de modo não recarrega a página');
+  ok(setMode.includes("nv.style.display = 'none'") && setMode.includes("nv.style.display = ''"), 'trocar de modo só esconde/mostra e move elementos reais');
 }
 
 process.exit(resumo() ? 0 : 1);

@@ -275,45 +275,53 @@ html, body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent}/* 1
   -webkit-user-select:auto;user-select:auto}
 </style>
 <style id="it-css">
-/* 1.14.0 — Interactive Tools: segundo ambiente (identidade Ouroboros). */
+/* 1.15.0 — Interactive Tools: casca (wrapper) sobre o editor convencional.
+   Nenhum motor novo: a prévia, o menu Add, os controles e o processamento
+   são os mesmos do Node Editor, só reorganizados. */
 .mode-switch{display:flex;background:var(--field);border:1px solid var(--line2);border-radius:7px;overflow:hidden;margin:0 8px;flex:none}
 .mode-switch button{background:transparent;border:0;padding:5px 10px;cursor:pointer;color:var(--text-muted);font-size:11.5px;white-space:nowrap}
 .mode-switch button.on{background:var(--brand);color:#171310;font-weight:700}
 .main.it-on{grid-template-columns:minmax(0,1fr)}
 body.it-mode #tlPanel{display:none}
-#itView{display:grid;grid-template-columns:52px minmax(0,1fr) 264px;min-height:0;background:var(--view)}
+#itView{display:grid;grid-template-columns:252px minmax(0,1fr) 312px;min-height:0;background:var(--view)}
 #itView[hidden]{display:none}
-.it-tools{display:flex;flex-direction:column;gap:4px;padding:8px 6px;background:var(--dock);border-right:1px solid var(--line)}
-.it-tool{background:var(--panel2);border:1px solid var(--line2);color:var(--text);border-radius:7px;min-height:38px;cursor:pointer;font-size:15px}
-.it-tool.on{border-color:var(--brand);color:var(--brand);box-shadow:inset 0 0 0 1px var(--brand)}
-.it-tool small{display:block;font-size:8.5px;color:var(--text-dim)}
-.it-stage-wrap{position:relative;overflow:auto;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 40%,var(--panel3),var(--view));padding:18px}
-.it-stage{position:relative;box-shadow:0 8px 32px rgba(0,0,0,.5);background:repeating-conic-gradient(#2a2a2a 0 25%,#222 0 50%) 0 0/16px 16px;line-height:0}
-.it-stage canvas{max-width:100%;height:auto}
-#itOverlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
-.it-pending{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);display:flex;gap:8px;align-items:center;background:var(--ss-bg);border:1px solid var(--line2);border-radius:9px;padding:8px 10px;z-index:5}
-.it-pending[hidden]{display:none}
-.it-side{background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.it-left,.it-side{background:var(--panel);border-right:1px solid var(--line);overflow-y:auto;min-height:0}
+.it-side{border-right:0;border-left:1px solid var(--line);display:flex;flex-direction:column}
 .it-sec{padding:10px;border-bottom:1px solid var(--line)}
 .it-sec h4{margin:0 0 8px;font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--text-muted)}
-.it-row{display:flex;align-items:center;gap:7px;margin:6px 0;font-size:11.5px}
-.it-row label{flex:1;color:var(--text-muted)}
-.it-row input[type=range]{flex:1.4}
-.it-row input[type=number],.it-row input[type=text],.it-row select{background:var(--field);border:1px solid var(--line2);border-radius:5px;padding:4px 6px;color:var(--text);min-width:0}
-.it-row input[type=number]{width:58px;flex:none}
 .it-btn{background:var(--btn);border:1px solid var(--line2);color:var(--text);border-radius:6px;padding:6px 9px;cursor:pointer;font-size:11.5px}
 .it-btn:hover{background:var(--hover)} .it-btn.acc{background:var(--brand);border-color:var(--brand);color:#171310;font-weight:700}
-#itLayers{overflow-y:auto;padding:6px;display:flex;flex-direction:column;gap:5px}
-.it-layer{display:flex;gap:7px;align-items:center;background:var(--item);border:1px solid var(--line2);border-radius:8px;padding:5px 6px;cursor:pointer}
-.it-layer.on{border-color:var(--brand);box-shadow:inset 0 0 0 1px var(--brand)}
-.it-layer canvas{width:46px;height:34px;object-fit:contain;background:repeating-conic-gradient(#333 0 25%,#262626 0 50%) 0 0/8px 8px;border-radius:4px;flex:none}
-.it-layer .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px}
-.it-layer .mini{background:transparent;border:0;color:var(--text-muted);cursor:pointer;padding:3px;font-size:12px}
-.it-layer.grp{background:var(--panel3);font-weight:700}
+.it-btn.on{background:#e5484d;border-color:#e5484d;color:#fff}
+.it-btn:disabled{opacity:.4;cursor:default}
+.it-btns{display:flex;flex-direction:column;gap:6px}
+.it-flow-item{display:flex;gap:6px;align-items:center;background:var(--item);border:1px solid var(--line2);border-radius:8px;padding:6px 7px;margin-bottom:5px;cursor:pointer}
+.it-flow-item.on{border-color:var(--brand);box-shadow:inset 0 0 0 1px var(--brand)}
+.it-flow-item.bypassed{opacity:.62}
+.it-flow-item .nm{flex:1;min-width:0}
+.it-flow-item .nm b{display:block;font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.it-flow-item .nm span{font-size:10px;color:var(--text-dim)}
+.it-flow-item .mini{background:transparent;border:1px solid var(--line2);border-radius:5px;color:var(--text-muted);cursor:pointer;padding:3px 6px;font-size:11px;flex:none}
+.it-flow-item .mini.on{background:#e5484d;border-color:#e5484d;color:#fff}
+.it-flow-item .idx{flex:none;width:16px;height:16px;border-radius:50%;background:var(--btn2);color:var(--text);font-size:10px;display:flex;align-items:center;justify-content:center}
+.it-link-arrow{text-align:center;color:var(--text-dim);font-size:10px;margin:-2px 0 3px}
+.it-stage-wrap{position:relative;display:flex;flex-direction:column;min-height:0;background:radial-gradient(circle at 50% 40%,var(--panel3),var(--view))}
+#itStageHost{flex:1;min-height:0;display:flex}
+#itStageHost .preview{flex:1;border-left:0}
+.it-stage-hint{padding:6px 10px;font-size:11px;color:var(--text-muted);border-top:1px solid var(--line);background:var(--panel)}
+#itPropsHost{padding:2px 4px 10px 14px}
+#itPropsHost .nbody{display:flex;flex-direction:column;gap:5px}
+.it-props-head{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
+.it-props-head b{font-size:12.5px}
+.it-props-head .sub{font-size:10.5px;color:var(--text-dim)}
+.it-props-btns{display:flex;gap:5px;flex-wrap:wrap}
+.it-empty{font-size:11.5px;color:var(--text-muted);line-height:1.5}
+.byp{width:20px;height:18px;border:0;border-radius:4px;background:rgba(0,0,0,.28);color:#fff;cursor:pointer;padding:0;font-size:11px;line-height:18px}
+.byp:hover{background:rgba(0,0,0,.45)} .byp.on{background:#e5484d;color:#fff}
+.node.bypassed .nhead{filter:saturate(.3) brightness(.72)}
 .it-help{position:absolute;inset:12px;overflow:auto;background:var(--ss-bg);border:1px solid var(--line2);border-radius:12px;padding:16px 18px;z-index:6;line-height:1.55;font-size:12.5px}
 .it-help[hidden]{display:none}
 .it-help h3{margin:0 0 8px;color:var(--brand)} .it-help li{margin:4px 0}
-@media(max-width:820px){#itView{grid-template-columns:46px minmax(0,1fr) 210px}.mode-switch button{padding:5px 6px}}
+@media(max-width:820px){#itView{grid-template-columns:200px minmax(0,1fr) 240px}.mode-switch button{padding:5px 6px}}
 </style>
 </head>
 <body>
@@ -450,34 +458,37 @@ body.it-mode #tlPanel{display:none}
     </div>
 
     <section id="itView" hidden aria-label="Interactive Tools">
-      <div class="it-tools" id="itTools">
-        <button class="it-tool on" data-tool="move" title="Mover camada (V)">✥<small>Move</small></button>
-        <button class="it-tool" data-tool="brush" title="Pincel (B)">🖌<small>Brush</small></button>
-        <button class="it-tool" data-tool="eraser" title="Borracha (E)">⌫<small>Erase</small></button>
-        <button class="it-tool" data-tool="fill" title="Balde de tinta (G)">🪣<small>Fill</small></button>
-        <button class="it-tool" data-tool="picker" title="Conta-gotas (I)">💧<small>Pick</small></button>
-        <button class="it-tool" data-tool="shape" title="Forma retângulo/elipse (U)">▭<small>Shape</small></button>
-        <button class="it-tool" data-tool="text" title="Texto (T)">T<small>Text</small></button>
-        <button class="it-tool" id="itHelpBtn" title="Guia do Interactive Tools">?<small>Guia</small></button>
-      </div>
+      <aside class="it-left">
+        <div class="it-sec">
+          <h4>Fluxo (até o Output)</h4>
+          <div id="itFlow"></div>
+        </div>
+        <div class="it-sec">
+          <h4>Adicionar / inserir</h4>
+          <div class="it-btns">
+            <button class="it-btn acc" id="itAddNode" type="button">＋ Adicionar nó (menu do editor)</button>
+            <button class="it-btn" id="itInsertFx" type="button">⇥ Inserir efeito no fluxo…</button>
+            <button class="it-btn" id="itInsertHere" type="button">＋ Inserir antes do nó em foco</button>
+          </div>
+        </div>
+        <div class="it-sec">
+          <h4>Todos os nós do projeto</h4>
+          <div id="itAllNodes"></div>
+        </div>
+        <div class="it-sec">
+          <button class="it-btn" id="itHelpBtn" type="button">? Guia do Interactive Tools</button>
+        </div>
+      </aside>
       <div class="it-stage-wrap" id="itStageWrap">
-        <div class="it-stage" id="itStage"><canvas id="itCanvas" width="1024" height="1024"></canvas><canvas id="itOverlay" width="1024" height="1024"></canvas></div>
-        <div class="it-pending" id="itPending" hidden><span id="itPendingTxt">Pré-visualização</span><button class="it-btn acc" id="itConfirm" type="button">Confirmar</button><button class="it-btn" id="itCancel" type="button">Cancelar</button></div>
+        <div id="itStageHost"></div>
+        <div class="it-stage-hint">Prévia ao vivo do nó em foco (a mesma do editor). Clique num nó à esquerda para focar e editar; ⏻ liga/desliga o efeito no fluxo.</div>
         <div class="it-help" id="itHelp" hidden></div>
       </div>
       <aside class="it-side">
-        <div class="it-sec" id="itProps"></div>
         <div class="it-sec">
-          <h4>Camadas</h4>
-          <div class="it-row"><button class="it-btn" id="itAddLayer" type="button">+ Camada</button><button class="it-btn" id="itAddGroup" type="button">+ Grupo</button><button class="it-btn" id="itDupLayer" type="button">Duplicar</button><button class="it-btn" id="itDelLayer" type="button">Excluir</button></div>
-          <div class="it-row"><button class="it-btn" id="itUpLayer" type="button">↑ Subir</button><button class="it-btn" id="itDownLayer" type="button">↓ Descer</button><button class="it-btn" id="itUndoBtn" type="button">↩ Desfazer</button><button class="it-btn" id="itRedoBtn" type="button">↪ Refazer</button></div>
-        </div>
-        <div id="itLayers"></div>
-        <div class="it-sec">
-          <h4>Integração com o grafo</h4>
-          <div class="it-row"><button class="it-btn" id="itImportGraph" type="button">Importar resultado do nó em prévia</button></div>
-          <div class="it-row"><button class="it-btn acc" id="itSendGraph" type="button">Enviar composição ao grafo (nó Image)</button></div>
-          <div class="it-row"><button class="it-btn" id="itExportPng" type="button">Exportar PNG</button><button class="it-btn" id="itNewDoc" type="button">Novo documento…</button></div>
+          <h4>Propriedades (controles reais do nó)</h4>
+          <div class="it-props-head" id="itPropsHead"></div>
+          <div id="itPropsHost"></div>
         </div>
       </aside>
     </section>
@@ -619,7 +630,7 @@ body.it-mode #tlPanel{display:none}
 
 /* Versão do editor — o arquivo VERSION na raiz é a fonte da verdade
    (o build do APK usa o mesmo número no versionName e falha se divergir). */
-const APP_VERSION = '1.14.1';
+const APP_VERSION = '1.15.0';
 /* tooltip do botão da marca: só o nome do produto (a versão é metadado, não entra na marca) */
 {
   const marca = document.getElementById('brandBtn');
@@ -26971,7 +26982,7 @@ function createNode(type, x, y, opts = {}) {
   const def = NODE_TYPES[type];
   const id = opts.id ?? nextId++;
   if (id >= nextId) nextId = id + 1;
-  const n = { id, type, x, y, params: {}, imgId: opts.imgId ?? null, cache: undefined, dirty: true, runtime: {}, ui: {}, collapsed: !!opts.collapsed };
+  const n = { id, type, x, y, params: {}, imgId: opts.imgId ?? null, cache: undefined, dirty: true, runtime: {}, ui: {}, collapsed: !!opts.collapsed, bypass: !!opts.bypass };
   for (const p of def.params) n.params[p.key] = Array.isArray(p.def) ? JSON.parse(JSON.stringify(p.def)) : p.def;
   n.tf = opts.tf ? Object.assign(tlNewTf(), opts.tf) : tlNewTf();   // animatable transform (timeline)
   n.animOpen = !!opts.animOpen;
@@ -27187,6 +27198,26 @@ function fxStudioRun(a, fn, params, pxKeys) {
   return fx7Canvas(a, (s, W, H) => fn(s, W, H, params));
 }
 
+/* 1.15.0 — Bypass de nó (efeito intermediário liga/desliga no próprio motor):
+   com o bypass ativo, o nó devolve a entrada principal intacta, como se não
+   estivesse no fluxo; a estrutura, os links e os parâmetros ficam. Vale nos
+   dois ambientes, porque quem muda é a avaliação, não a interface. */
+function bypassResult(n, ins) { return itBypassValor(NODE_TYPES[n.type] || {}, ins); }
+function nodeSetBypass(n, on) {
+  if (!n) return;
+  n.bypass = !!on;
+  if (n.el) {
+    n.el.classList.toggle('bypassed', n.bypass);
+    const b = n.el.querySelector('.byp');
+    if (b) { b.classList.toggle('on', n.bypass); b.title = n.bypass ? 'Bypass ativo — o fluxo passa direto. Clique para reativar o efeito.' : 'Bypass: desligar este efeito (o fluxo passa direto, sem remover o nó)'; }
+  }
+  markDirty(n.id);
+  requestRender();
+  commit();
+  if (typeof itFlowRender === 'function' && document.body.classList.contains('it-mode')) itFlowRender();
+  setStatus(n.bypass ? `"${(NODE_TYPES[n.type] || {}).title || n.type}" em bypass: o fluxo passa direto.` : `"${(NODE_TYPES[n.type] || {}).title || n.type}" ativo no fluxo.`);
+}
+
 function evalNode(id) {
   const n = nodes.get(id);
   if (!n) return null;
@@ -27201,7 +27232,7 @@ function evalNode(id) {
   const savedParams = fxFastParams(n, ins);   // 2.9.49: faithful light preview (parameters in px at the preview scale)
   let res = null;
   try {
-    res = RUN[n.type](n, ins);
+    res = n.bypass ? bypassResult(n, ins) : RUN[n.type](n, ins);
     if (res) fxTrackFull(res, ins);           // 2.9.49: full-resolution dimensions of the result
     res = animApply(n, res);
   } catch (err) {
@@ -27521,6 +27552,13 @@ function buildNodeEl(n) {
   fold.title = 'Collapse / expand this node';
   fold.addEventListener('click', e => { e.stopPropagation(); setNodeCollapsed(n, !n.collapsed); });
   head.append(fold);
+  if (def.inputs && def.inputs.length && n.type !== 'output') {
+    const byp = E('button', 'byp' + (n.bypass ? ' on' : ''), '⏻');
+    byp.title = n.bypass ? 'Bypass ativo — o fluxo passa direto. Clique para reativar o efeito.' : 'Bypass: desligar este efeito (o fluxo passa direto, sem remover o nó)';
+    byp.addEventListener('click', e => { e.stopPropagation(); nodeSetBypass(n, !n.bypass); });
+    head.append(byp);
+    el.classList.toggle('bypassed', !!n.bypass);
+  }
   // the Output has the same eye as the other nodes: it only changes the preview, without enlarging
   head.append(E('button', 'eye', '◉'));
   el.append(head);
@@ -32088,7 +32126,10 @@ function addContar(cat) {
 
 function posicionaAddMenu() {
   if (document.body.classList.contains('mobile')) return;   // no celular é folha fixa (CSS)
-  const r = viewEl.getBoundingClientRect();
+  /* 1.15.0: no Interactive Tools o menu abre sobre o palco (o grafo fica oculto) */
+  const r = document.body.classList.contains('it-mode')
+    ? (document.getElementById('itStageWrap') || viewEl).getBoundingClientRect()
+    : viewEl.getBoundingClientRect();
   if (addView === 'wheel') {
     const S = addTam() + 24;
     addMenu.style.width = S + 'px';
@@ -35163,7 +35204,7 @@ function serialize() {
   return JSON.stringify({
     v: 1,
     wireCurve: { ...WIRE_CURVE },
-    nodes: [...nodes.values()].map(n => ({ id: n.id, type: n.type, x: Math.round(n.x), y: Math.round(n.y), params: n.params, imgId: n.imgId, collapsed: !!n.collapsed, tf: n.tf, animOpen: !!n.animOpen })),
+    nodes: [...nodes.values()].map(n => ({ id: n.id, type: n.type, x: Math.round(n.x), y: Math.round(n.y), params: n.params, imgId: n.imgId, collapsed: !!n.collapsed, tf: n.tf, animOpen: !!n.animOpen, bypass: !!n.bypass })),
     links,
     zipTies: zipTies.map(t => ({ id: t.id, x: t.x, y: t.y, keys: t.keys.slice() })),
     previewId,
@@ -35184,6 +35225,7 @@ function commit() {
   lastState = s;
   redoStack.length = 0;
   try { localStorage.setItem('node-image-editor:autosave', s); } catch (_) {}
+  if (typeof window !== 'undefined' && window.__itCommit) window.__itCommit();   // 1.15.0: a casca Interactive Tools acompanha o grafo
 }
 
 function undo() {
@@ -35257,7 +35299,7 @@ function restoreGraph(data) {
     if (nd.type === 'spraydelic') { nd.type = 'vandal'; nd.params = { ...nd.params, vandalMode: 'classic' }; }
     if (nd.type === 'halftone') nd.type = 'halfmode';   // 2.9.57: old name of HalfMode
     if (!NODE_TYPES[nd.type]) continue;
-    createNode(nd.type, nd.x, nd.y, { id: nd.id, params: nd.params, imgId: nd.imgId, collapsed: nd.collapsed, tf: nd.tf, animOpen: nd.animOpen });
+    createNode(nd.type, nd.x, nd.y, { id: nd.id, params: nd.params, imgId: nd.imgId, collapsed: nd.collapsed, tf: nd.tf, animOpen: nd.animOpen, bypass: nd.bypass });
   }
   links = links.filter(l => nodes.has(l.from) && nodes.has(l.to));
   zipTies = (Array.isArray(data.zipTies) ? data.zipTies : []).map(t => ({
@@ -35267,7 +35309,7 @@ function restoreGraph(data) {
   selZip = null;
   bindZipTies();
   loadGroups(data.groups);
-  if (data.it) { try { itLoad(data.it); } catch (_) { window.__itPending = data.it; } }   // 1.14.0: restaura as camadas interativas junto
+  if (data.it) { try { itLoad(data.it); } catch (_) { window.__itPending = data.it; } }   // 1.15.0: estado da casca Interactive Tools (foco/legado) junto do grafo
   tlLoad(data.tl);
   for (const n of nodes.values()) n.dirty = true;
   drawLinks();
@@ -40758,434 +40800,312 @@ startScreenOpen();
 })();
 
 /* =====================================================================
-   Interactive Tools 1.14.0 — segundo ambiente do Ouroboros Editor.
-   Canvas central + ferramentas diretas + camadas raster/texto/forma/grupo,
-   com prévia antes de confirmar e histórico próprio. As camadas vivem no
-   mesmo projeto (serialize().it) e trocam imagens com o grafo pelos
-   mecanismos existentes (evalNode/readResult → camada; composição →
-   imageStore + nó Image). Nenhum motor de renderização paralelo: o
-   composto final é um canvas 2D comum, como os demais nós CPU.
+   Interactive Tools 1.15.0 — CASCA (wrapper) sobre o editor convencional.
+   Correção crítica da 1.14: nada de editor paralelo. Este ambiente só
+   reorganiza a interação — os nós são os mesmos objetos, os controles
+   são os mesmos elementos DOM (movidos, nunca clonados/recriados), o
+   menu Add é o mesmo, a inserção em link usa removeLink/connect/
+   addNodeAt/insertNodeInLink do editor, a prévia é o mesmo elemento
+   .preview/#gl (movido de lugar) e o bypass atua no evalNode.
    ===================================================================== */
-/* IT_PURO_INI */
-const IT_BLENDS = [['normal', 'Normal', 'source-over'], ['multiply', 'Multiply', 'multiply'], ['screen', 'Screen', 'screen'], ['overlay', 'Overlay', 'overlay'], ['darken', 'Darken', 'darken'], ['lighten', 'Lighten', 'lighten'], ['difference', 'Difference', 'difference'], ['hue', 'Hue', 'hue'], ['saturation', 'Saturation', 'saturation'], ['color', 'Color', 'color'], ['luminosity', 'Luminosity', 'luminosity']];
-function itBlendOp(v) { const b = IT_BLENDS.find(x => x[0] === v); return b ? b[2] : 'source-over'; }
-function itClampNum(v, mn, mx, pad) { v = Number(v); return isFinite(v) ? Math.max(mn, Math.min(mx, v)) : pad; }
-function itNovaCamada(id, kind) {
-  return { id, name: kind === 'group' ? 'Grupo' : kind === 'text' ? 'Texto' : kind === 'shape' ? 'Forma' : 'Camada', kind, visible: true, opacity: 100, blend: 'normal', x: 0, y: 0, scale: 100, rot: 0, groupId: null, text: 'Texto', font: 'sans-serif', size: 64, color: '#ffffff', shape: 'rect', fill: '#ff7a1a', bbox: null, canvas: null };
+/* IT2_PURO_INI */
+/* Escolhe o link de entrada "principal" de um nó: o do input preferido
+   (preferIn) ou o primeiro ligado. Opera sobre listas planas de links. */
+function itEscolheEntrada(linkList, toId, pref) {
+  let l = linkList.find(x => x.to === toId && x.input === (pref == null ? 0 : pref));
+  if (!l) l = linkList.filter(x => x.to === toId).sort((a, b) => a.input - b.input)[0];
+  return l || null;
 }
-/* IT_PURO_FIM */
-
-let IT = { w: 1024, h: 1024, layers: [], active: null, tool: 'move', color: '#ff7a1a', size: 28, fillTol: 32, next: 1, undo: [], redo: [], pending: null, drag: null };
-function itEl(id) { return document.getElementById(id); }
-function itLayer(id) { return IT.layers.find(l => l.id === id) || null; }
-function itActive() { return itLayer(IT.active); }
-function itNovoCanvas(w, h) { const c = document.createElement('canvas'); c.width = Math.max(1, w || IT.w); c.height = Math.max(1, h || IT.h); return c; }
-function itEnsureCanvas(l) { if (!l.canvas) { l.canvas = itNovoCanvas(); itRenderProcedural(l); } return l.canvas; }
-function itRenderProcedural(l) {
-  if (!l || l.kind === 'raster' || l.kind === 'group') return;
-  const c = itEnsureCanvas(l), g = c.getContext('2d');
-  g.clearRect(0, 0, c.width, c.height);
-  if (l.kind === 'text') {
-    g.font = '700 ' + (l.size || 64) + 'px ' + (l.font || 'sans-serif');
-    g.fillStyle = l.color || '#fff'; g.textBaseline = 'top';
-    g.fillText(l.text || '', 8, 8);
-  } else if (l.kind === 'shape' && l.bbox) {
-    const [x, y, w, h] = l.bbox; g.fillStyle = l.fill || '#ff7a1a';
-    if (l.shape === 'ellipse') { g.beginPath(); g.ellipse(x + w / 2, y + h / 2, Math.abs(w / 2), Math.abs(h / 2), 0, 0, Math.PI * 2); g.fill(); }
-    else g.fillRect(x, y, w, h);
+/* Ordem do fluxo: do nó-fonte até o alvo, seguindo as entradas principais.
+   prefDe(id) devolve o input preferido daquele nó (padrão 0). */
+function itCadeia(linkList, targetId, prefDe) {
+  const ordem = [], vistos = new Set();
+  let cur = targetId;
+  while (cur != null && !vistos.has(cur)) {
+    vistos.add(cur);
+    ordem.unshift(cur);
+    const l = itEscolheEntrada(linkList, cur, prefDe ? prefDe(cur) : 0);
+    cur = l ? l.from : null;
   }
+  return ordem;
 }
+/* Valor que atravessa um nó em bypass: a entrada principal intacta. */
+function itBypassValor(def, ins) {
+  let idx = (def && def.preferIn) != null ? def.preferIn : 0;
+  let v = ins[idx];
+  if (v == null) for (const x of ins) if (x != null) { v = x; break; }
+  if (Array.isArray(v)) v = v[0];
+  return v == null ? null : v;
+}
+/* IT2_PURO_FIM */
+
+let IT = { focusId: null, legacy: null };
+let itHosted = null;      // { n, body } — o .nbody real do nó, hospedado no painel
+let itPvHome = null;      // lugar original do elemento .preview
+let itMenuHome = null;    // lugar original do #addMenu
+
+function itEl(id) { return document.getElementById(id); }
 function itSerialize() {
   try {
-    if (!IT || !Array.isArray(IT.layers)) return null;
-    return { v: 1, w: IT.w, h: IT.h, active: IT.active, next: IT.next, layers: IT.layers.map(l => ({ id: l.id, name: l.name, kind: l.kind, visible: l.visible, opacity: l.opacity, blend: l.blend, x: l.x, y: l.y, scale: l.scale, rot: l.rot, groupId: l.groupId, text: l.text, font: l.font, size: l.size, color: l.color, shape: l.shape, fill: l.fill, bbox: l.bbox, src: l.kind === 'raster' && l.canvas ? l.canvas.toDataURL('image/png') : null })) };
+    if (typeof IT === 'undefined') return null;
+    return { v: 2, focusId: IT.focusId, legacy: IT.legacy };
   } catch (_) { return null; }
 }
 function itLoad(data) {
-  if (!data || !Array.isArray(data.layers)) return;
-  IT.w = itClampNum(data.w, 16, 8192, 1024); IT.h = itClampNum(data.h, 16, 8192, 1024);
-  IT.next = itClampNum(data.next, 1, 1e9, IT.layers.length + 1);
-  IT.layers = data.layers.map(d => {
-    const l = Object.assign(itNovaCamada(d.id, d.kind || 'raster'), d);
-    l.canvas = null;
-    if (l.kind === 'raster') {
-      l.canvas = itNovoCanvas();
-      if (d.src) { const img = new Image(); img.onload = () => { l.canvas.getContext('2d').drawImage(img, 0, 0); itDraw(); itRenderLayers(); }; img.src = d.src; }
-    } else itRenderProcedural(l);
-    return l;
-  });
-  IT.active = data.active != null && itLayer(data.active) ? data.active : (IT.layers.length ? IT.layers[IT.layers.length - 1].id : null);
-  IT.pending = null;
-  if (typeof itUI === 'function') itUI();
-  if (typeof itDraw === 'function') itDraw();
+  if (!data) return;
+  /* projetos da 1.14 trazem as camadas raster do ambiente antigo: o pacote
+     fica preservado no arquivo (campo legacy), mas a interface nova não
+     recria aquele editor paralelo — quem manda agora é o grafo. */
+  if (Array.isArray(data.layers)) IT.legacy = { w: data.w, h: data.h, layers: data.layers };
+  if (data.legacy) IT.legacy = data.legacy;
+  IT.focusId = data.focusId != null ? data.focusId : IT.focusId;
+  if (itHosted) { const h = itEl('itPropsHost'); if (h) h.innerHTML = ''; itHosted = null; }
+  if (document.body && document.body.classList.contains('it-mode')) { itFlowRender(); if (IT.focusId != null && nodes.has(IT.focusId)) itFocus(IT.focusId, false); }
 }
-function itHistPush() {
-  const s = itSerialize();
-  if (!s) return;
-  IT.undo.push(JSON.stringify(s));
-  if (IT.undo.length > 25) IT.undo.shift();
-  IT.redo.length = 0;
+function itTitulo(n) { return n ? ((NODE_TYPES[n.type] || {}).title || n.type) : ''; }
+function itLinkEntrada(n) {
+  if (!n) return null;
+  const def = NODE_TYPES[n.type] || {};
+  return itEscolheEntrada(links, n.id, def.preferIn);
 }
-function itHistRestore(json) {
-  try { const d = JSON.parse(json); IT.undo.length = IT.undo.length; itLoad(d); } catch (_) {}
-  itUI(); itDraw();
-  if (typeof commit === 'function') commit();
+function itRestauraControles() {
+  if (!itHosted) return;
+  const { n, body } = itHosted;
+  itHosted = null;
+  if (n && n.el && body) n.el.append(body);
 }
-function itUndo() { if (!IT.undo.length) return setStatus('Interactive Tools: nada para desfazer.'); IT.redo.push(JSON.stringify(itSerialize())); itHistRestore(IT.undo.pop()); }
-function itRedo() { if (!IT.redo.length) return setStatus('Interactive Tools: nada para refazer.'); IT.undo.push(JSON.stringify(itSerialize())); itHistRestore(IT.redo.pop()); }
-function itCompositeCanvas() {
-  const out = itNovoCanvas(IT.w, IT.h), g = out.getContext('2d');
-  const grupos = {};
-  for (const l of IT.layers) if (l.kind === 'group') grupos[l.id] = l;
-  for (const l of IT.layers) {
-    if (l.kind === 'group' || !l.visible) continue;
-    const grp = l.groupId != null ? grupos[l.groupId] : null;
-    if (grp && !grp.visible) continue;
-    let cv = itEnsureCanvas(l);
-    if (IT.pending && IT.pending.layerId === l.id && IT.pending.temp) cv = IT.pending.temp;
-    g.save();
-    g.globalAlpha = Math.max(0, Math.min(1, (l.opacity / 100) * (grp ? grp.opacity / 100 : 1)));
-    g.globalCompositeOperation = itBlendOp(l.blend);
-    g.translate(IT.w / 2 + (l.x || 0), IT.h / 2 + (l.y || 0));
-    g.rotate((l.rot || 0) * Math.PI / 180);
-    g.scale((l.scale || 100) / 100, (l.scale || 100) / 100);
-    g.drawImage(cv, -IT.w / 2, -IT.h / 2);
-    g.restore();
+function itFocus(id, render = true) {
+  const n = nodes.get(id);
+  IT.focusId = n ? id : null;
+  selected.clear();
+  if (n) selected.add(id);
+  refreshSelection();
+  itHostProps(n);
+  if (n) previewId = id;
+  itFlowRender();
+  if (render) requestRender();
+}
+function itHostProps(n) {
+  itRestauraControles();
+  const head = itEl('itPropsHead'), host = itEl('itPropsHost');
+  if (!head || !host) return;
+  head.innerHTML = ''; host.innerHTML = '';
+  if (!n) {
+    head.append(E('div', 'it-empty', 'Nenhum nó em foco. Clique num nó do fluxo (à esquerda) para ver e editar aqui os controles reais dele.'));
+    return;
   }
-  if (IT.pending && (IT.pending.tipo === 'shape' || IT.pending.tipo === 'text') && IT.pending.temp) g.drawImage(IT.pending.temp, 0, 0);
-  return out;
+  const def = NODE_TYPES[n.type] || {};
+  head.append(E('b', '', def.title || n.type));
+  head.append(E('div', 'sub', 'Tipo: ' + n.type + ' · #' + n.id + (n.bypass ? ' · EM BYPASS (o fluxo passa direto)' : '')));
+  const btns = E('div', 'it-props-btns');
+  if (def.inputs && def.inputs.length && n.type !== 'output') {
+    const bb = E('button', 'it-btn' + (n.bypass ? ' on' : ''), n.bypass ? '⏻ Bypass ON' : '⏻ Bypass OFF');
+    bb.id = 'itBypBtn'; bb.type = 'button';
+    bb.title = 'Liga/desliga este efeito no fluxo, sem remover o nó nem os links';
+    bb.addEventListener('click', () => nodeSetBypass(n, !n.bypass));
+    btns.append(bb);
+  }
+  const bIns = E('button', 'it-btn', '＋ Inserir antes deste'); bIns.type = 'button';
+  bIns.title = 'Insere um efeito novo no link que alimenta este nó';
+  bIns.addEventListener('click', () => { const l = itLinkEntrada(n); if (l) itInserirNoLink(l); else setStatus('Este nó não tem link de entrada para inserir no meio.', true); });
+  const bGraph = E('button', 'it-btn', 'Ver no grafo'); bGraph.type = 'button';
+  bGraph.addEventListener('click', () => itSetMode('nodes'));
+  const bDel = E('button', 'it-btn', 'Excluir nó'); bDel.type = 'button';
+  bDel.title = 'Remove o nó reconectando o fluxo (mesma exclusão do editor)';
+  bDel.addEventListener('click', () => {
+    itRestauraControles();
+    removeNode(n.id);
+    IT.focusId = null;
+    commit(); drawLinks(); requestRender();
+    const out = outputNode();
+    if (out) itFocus(out.id); else { itHostProps(null); itFlowRender(); }
+  });
+  btns.append(bIns, bGraph, bDel);
+  head.append(btns);
+  const body = n.el ? n.el.querySelector(':scope > .nbody') : null;
+  if (body) { itHosted = { n, body }; host.append(body); }
+  else head.append(E('div', 'it-empty', 'Este nó não tem controles.'));
 }
-function itDraw() {
-  const cv = itEl('itCanvas');
-  if (!cv) return;
-  if (cv.width !== IT.w || cv.height !== IT.h) { cv.width = IT.w; cv.height = IT.h; }
-  cv.getContext('2d').clearRect(0, 0, IT.w, IT.h);
-  cv.getContext('2d').drawImage(itCompositeCanvas(), 0, 0);
-}
-function itSetTool(t) {
-  IT.tool = t;
-  document.querySelectorAll('#itTools .it-tool[data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === t));
-  itRenderProps();
-}
-function itRenderLayers() {
-  const box = itEl('itLayers');
+function itFlowRender() {
+  const box = itEl('itFlow'), todos = itEl('itAllNodes');
   if (!box) return;
   box.innerHTML = '';
-  const grupos = IT.layers.filter(l => l.kind === 'group');
-  [...IT.layers].reverse().forEach(l => {
-    const item = E('div', 'it-layer' + (l.id === IT.active ? ' on' : '') + (l.kind === 'group' ? ' grp' : ''));
-    const th = document.createElement('canvas'); th.width = 46; th.height = 34;
-    if (l.kind !== 'group') { const tg = th.getContext('2d'); tg.drawImage(itEnsureCanvas(l), 0, 0, 46, 34); }
-    else th.getContext('2d').fillText('▸', 18, 20);
-    const eye = E('button', 'mini', l.visible ? '👁' : '—'); eye.title = 'Mostrar/ocultar';
-    eye.addEventListener('click', e => { e.stopPropagation(); itHistPush(); l.visible = !l.visible; itDraw(); itRenderLayers(); commit(); });
-    const nm = E('span', 'nm', (l.groupId != null && grupos.some(g => g.id === l.groupId) ? '↳ ' : '') + l.name);
-    nm.title = 'Duplo clique renomeia';
-    nm.addEventListener('dblclick', e => { e.stopPropagation(); const nv = prompt('Nome da camada', l.name); if (nv) { itHistPush(); l.name = nv; itRenderLayers(); commit(); } });
-    item.append(th, eye, nm);
-    item.addEventListener('click', () => { IT.active = l.id; itRenderLayers(); itRenderProps(); });
-    box.append(item);
-  });
+  const alvo = outputNode() || (previewId != null ? nodes.get(previewId) : null) || (IT.focusId != null ? nodes.get(IT.focusId) : null);
+  if (!alvo) {
+    box.append(E('div', 'it-empty', 'Nenhum Output ainda. Adicione nós com o botão abaixo — são os mesmos nós do editor.'));
+  } else {
+    const ids = itCadeia(links, alvo.id, id => { const nd = nodes.get(id); return nd ? ((NODE_TYPES[nd.type] || {}).preferIn ?? 0) : 0; });
+    ids.forEach((id, i) => {
+      const n = nodes.get(id);
+      if (!n) return;
+      const def = NODE_TYPES[n.type] || {};
+      const item = E('div', 'it-flow-item' + (id === IT.focusId ? ' on' : '') + (n.bypass ? ' bypassed' : ''));
+      item.append(E('span', 'idx', String(i + 1)));
+      const nm = E('div', 'nm');
+      nm.append(E('b', '', def.title || n.type), E('span', '', n.type + (n.bypass ? ' · bypass' : '')));
+      item.append(nm);
+      const lIn = itLinkEntrada(n);
+      const bPlus = E('button', 'mini', '＋'); bPlus.type = 'button';
+      bPlus.title = lIn ? 'Inserir efeito no link que alimenta este nó' : 'Sem link de entrada';
+      bPlus.disabled = !lIn;
+      bPlus.addEventListener('click', e => { e.stopPropagation(); if (lIn) itInserirNoLink(lIn); });
+      item.append(bPlus);
+      if (def.inputs && def.inputs.length && n.type !== 'output') {
+        const bb = E('button', 'mini' + (n.bypass ? ' on' : ''), '⏻'); bb.type = 'button';
+        bb.title = n.bypass ? 'Bypass ativo — clique para reativar' : 'Bypass: desligar este efeito no fluxo';
+        bb.addEventListener('click', e => { e.stopPropagation(); nodeSetBypass(n, !n.bypass); });
+        item.append(bb);
+      }
+      item.addEventListener('click', () => itFocus(id));
+      box.append(item);
+      if (i < ids.length - 1) box.append(E('div', 'it-link-arrow', '↓ link'));
+    });
+  }
+  if (todos) {
+    todos.innerHTML = '';
+    const noFluxo = new Set();
+    if (alvo) for (const id of itCadeia(links, alvo.id, () => 0)) noFluxo.add(id);
+    let algum = false;
+    for (const n of nodes.values()) {
+      if (noFluxo.has(n.id)) continue;
+      algum = true;
+      const item = E('div', 'it-flow-item' + (n.id === IT.focusId ? ' on' : '') + (n.bypass ? ' bypassed' : ''));
+      const nm = E('div', 'nm');
+      nm.append(E('b', '', itTitulo(n)), E('span', '', n.type + (links.some(l => l.from === n.id || l.to === n.id) ? '' : ' · sem links')));
+      item.append(nm);
+      const bIns = E('button', 'mini', '⇥'); bIns.type = 'button';
+      bIns.title = 'Inserir este nó no fluxo (no link que alimenta o Output/nó em foco)';
+      bIns.addEventListener('click', e => { e.stopPropagation(); itInserirExistente(n); });
+      item.append(bIns);
+      item.addEventListener('click', () => itFocus(n.id));
+      todos.append(item);
+    }
+    if (!algum) todos.append(E('div', 'it-empty', 'Todos os nós estão no fluxo acima.'));
+  }
+  const bb = itEl('itBypBtn');
+  if (bb && itHosted) bb.classList.toggle('on', !!itHosted.n.bypass);
 }
-function itNumRow(rotulo, val, mn, mx, passo, fn) {
-  const r = E('div', 'it-row'), lab = E('label', '', rotulo), inp = document.createElement('input');
-  inp.type = 'number'; inp.value = val; inp.min = mn; inp.max = mx; inp.step = passo || 1;
-  inp.addEventListener('change', () => fn(Number(inp.value)));
-  r.append(lab, inp); return r;
+/* Insere um nó NOVO no meio de um link existente, usando o menu Add real:
+   remove o link (como o arrastar de fio faz), abre o menu com o pending de
+   inserção e, se o usuário cancelar, o hideAddMenu restaura o link. */
+function itInserirNoLink(l) {
+  if (!l) return;
+  const fromN = nodes.get(l.from), toN = nodes.get(l.to);
+  const restore = { from: l.from, to: l.to, input: l.input, out: l.out || 0 };
+  removeLink(l);
+  drawLinks(); requestRender();
+  const r = itEl('itStageWrap').getBoundingClientRect();
+  openAddMenu(r.left + r.width / 2, r.top + r.height / 2, { outId: restore.from, outIdx: restore.out, insertTo: restore.to, insertIdx: restore.input, restore });
+  if (fromN && toN) addPos = { x: Math.round((fromN.x + toN.x) / 2), y: Math.round((fromN.y + toN.y) / 2) };
+  setStatus('Escolha o efeito: ele entra no link ' + itTitulo(fromN) + ' → ' + itTitulo(toN) + '. Cancelar (Esc) restaura o link original.');
 }
-function itRenderProps() {
-  const box = itEl('itProps');
-  if (!box) return;
-  box.innerHTML = '';
-  box.append(E('h4', '', 'Propriedades'));
-  const corR = E('div', 'it-row'); corR.append(E('label', '', 'Cor'));
-  const cor = document.createElement('input'); cor.type = 'color'; cor.value = IT.color;
-  cor.addEventListener('input', () => { IT.color = cor.value; });
-  corR.append(cor); box.append(corR);
-  if (IT.tool === 'brush' || IT.tool === 'eraser') {
-    const r = E('div', 'it-row'); r.append(E('label', '', 'Tamanho do pincel'));
-    const s = document.createElement('input'); s.type = 'range'; s.min = 1; s.max = 300; s.value = IT.size;
-    s.addEventListener('input', () => IT.size = Number(s.value)); r.append(s); box.append(r);
-  }
-  if (IT.tool === 'fill') {
-    const r = E('div', 'it-row'); r.append(E('label', '', 'Tolerância do balde'));
-    const s = document.createElement('input'); s.type = 'range'; s.min = 0; s.max = 120; s.value = IT.fillTol;
-    s.addEventListener('input', () => IT.fillTol = Number(s.value)); r.append(s); box.append(r);
-  }
-  if (IT.tool === 'text') box.append(E('div', 'it-row', 'Clique no canvas para posicionar o texto; edite conteúdo, tamanho e cor na camada criada.'));
-  const l = itActive();
-  if (!l) { box.append(E('div', 'it-row', 'Nenhuma camada selecionada.')); return; }
-  box.append(E('h4', '', 'Camada: ' + l.name));
-  const nmR = E('div', 'it-row'); nmR.append(E('label', '', 'Nome'));
-  const nm = document.createElement('input'); nm.type = 'text'; nm.value = l.name;
-  nm.addEventListener('change', () => { itHistPush(); l.name = nm.value || l.name; itRenderLayers(); commit(); });
-  nmR.append(nm); box.append(nmR);
-  const opR = E('div', 'it-row'); opR.append(E('label', '', 'Opacidade'));
-  const op = document.createElement('input'); op.type = 'range'; op.min = 0; op.max = 100; op.value = l.opacity;
-  op.addEventListener('input', () => { l.opacity = Number(op.value); itDraw(); });
-  op.addEventListener('change', () => commit());
-  opR.append(op); box.append(opR);
-  const blR = E('div', 'it-row'); blR.append(E('label', '', 'Blend'));
-  const bl = document.createElement('select');
-  for (const [v, lab] of IT_BLENDS) { const o = E('option', '', lab); o.value = v; if (v === l.blend) o.selected = true; bl.append(o); }
-  bl.addEventListener('change', () => { itHistPush(); l.blend = bl.value; itDraw(); commit(); });
-  blR.append(bl); box.append(blR);
-  if (l.kind !== 'group') {
-    box.append(itNumRow('Posição X', Math.round(l.x || 0), -4096, 4096, 1, v => { itHistPush(); l.x = v; itDraw(); commit(); }));
-    box.append(itNumRow('Posição Y', Math.round(l.y || 0), -4096, 4096, 1, v => { itHistPush(); l.y = v; itDraw(); commit(); }));
-    box.append(itNumRow('Escala %', Math.round(l.scale || 100), 5, 400, 1, v => { itHistPush(); l.scale = v; itDraw(); commit(); }));
-    box.append(itNumRow('Rotação °', Math.round(l.rot || 0), -180, 180, 1, v => { itHistPush(); l.rot = v; itDraw(); commit(); }));
-  }
-  const grupos = IT.layers.filter(g => g.kind === 'group' && g.id !== l.id);
-  if (l.kind !== 'group' && grupos.length) {
-    const gR = E('div', 'it-row'); gR.append(E('label', '', 'Grupo'));
-    const gs = document.createElement('select');
-    const nenhum = E('option', '', 'Nenhum'); nenhum.value = ''; if (l.groupId == null) nenhum.selected = true; gs.append(nenhum);
-    for (const g of grupos) { const o = E('option', '', g.name); o.value = g.id; if (l.groupId === g.id) o.selected = true; gs.append(o); }
-    gs.addEventListener('change', () => { itHistPush(); l.groupId = gs.value === '' ? null : Number(gs.value); itDraw(); itRenderLayers(); commit(); });
-    gR.append(gs); box.append(gR);
-  }
-  if (l.kind === 'text') {
-    const tR = E('div', 'it-row'); tR.append(E('label', '', 'Texto'));
-    const ti = document.createElement('input'); ti.type = 'text'; ti.value = l.text || '';
-    ti.addEventListener('change', () => { itHistPush(); l.text = ti.value; itRenderProcedural(l); itDraw(); itRenderLayers(); commit(); });
-    tR.append(ti); box.append(tR);
-    box.append(itNumRow('Tamanho', l.size || 64, 8, 400, 1, v => { itHistPush(); l.size = v; itRenderProcedural(l); itDraw(); commit(); }));
-    const cR = E('div', 'it-row'); cR.append(E('label', '', 'Cor do texto'));
-    const ci = document.createElement('input'); ci.type = 'color'; ci.value = l.color || '#ffffff';
-    ci.addEventListener('input', () => { l.color = ci.value; itRenderProcedural(l); itDraw(); });
-    ci.addEventListener('change', () => commit());
-    cR.append(ci); box.append(cR);
-  }
-  if (l.kind === 'shape') {
-    const fR = E('div', 'it-row'); fR.append(E('label', '', 'Preenchimento'));
-    const fi = document.createElement('input'); fi.type = 'color'; fi.value = l.fill || '#ff7a1a';
-    fi.addEventListener('input', () => { l.fill = fi.value; itRenderProcedural(l); itDraw(); });
-    fi.addEventListener('change', () => commit());
-    fR.append(fi); box.append(fR);
-    const sR = E('div', 'it-row'); sR.append(E('label', '', 'Forma'));
-    const ss = document.createElement('select');
-    for (const [v, lab] of [['rect', 'Retângulo'], ['ellipse', 'Elipse']]) { const o = E('option', '', lab); o.value = v; if (l.shape === v) o.selected = true; ss.append(o); }
-    ss.addEventListener('change', () => { itHistPush(); l.shape = ss.value; itRenderProcedural(l); itDraw(); commit(); });
-    sR.append(ss); box.append(sR);
-  }
+/* Insere um nó EXISTENTE e livre no fluxo (insertNodeInLink do editor). */
+function itInserirExistente(n) {
+  if (!n) return;
+  if (!canInsertNode(n)) return setStatus('Este nó já está ligado ou não pode entrar no meio de um link.', true);
+  const alvo = (IT.focusId != null && nodes.get(IT.focusId)) || outputNode();
+  const l = alvo ? itLinkEntrada(alvo) : null;
+  if (!l) return setStatus('Não há link de entrada no nó alvo para inserir.', true);
+  insertNodeInLink(n.id, l);
+  drawLinks(); commit(); requestRender();
+  itFocus(n.id);
 }
-function itUI() { itRenderLayers(); itRenderProps(); }
-function itPendingShow(txt) { const p = itEl('itPending'); if (p) { p.hidden = false; itEl('itPendingTxt').textContent = txt; } }
-function itPendingHide() { const p = itEl('itPending'); if (p) p.hidden = true; }
-function itCancelPending() { IT.pending = null; itPendingHide(); itDraw(); }
-function itConfirmPending() {
-  const p = IT.pending;
-  if (!p) return;
-  itHistPush();
-  if (p.tipo === 'brush' || p.tipo === 'fill') {
-    const l = itLayer(p.layerId);
-    if (l) { l.canvas = p.temp; }
-  } else if (p.tipo === 'shape') {
-    const l = itNovaCamada(IT.next++, 'shape');
-    l.name = 'Forma ' + (IT.next - 1); l.shape = p.shape; l.fill = IT.color; l.bbox = p.bbox; l.canvas = itNovoCanvas();
-    itRenderProcedural(l); IT.layers.push(l); IT.active = l.id;
-  } else if (p.tipo === 'text') {
-    const l = itNovaCamada(IT.next++, 'text');
-    l.name = 'Texto ' + (IT.next - 1); l.text = p.text; l.size = 64; l.color = IT.color; l.x = p.x - IT.w / 2; l.y = p.y - IT.h / 2; l.canvas = itNovoCanvas();
-    itRenderProcedural(l); IT.layers.push(l); IT.active = l.id;
-  }
-  IT.pending = null; itPendingHide(); itUI(); itDraw(); commit();
-}
-function itPos(e) {
-  const cv = itEl('itCanvas'), r = cv.getBoundingClientRect();
-  return { x: (e.clientX - r.left) / Math.max(1, r.width) * IT.w, y: (e.clientY - r.top) / Math.max(1, r.height) * IT.h };
-}
-function itPincel(g, x, y, apagar) {
-  g.save();
-  g.globalCompositeOperation = apagar ? 'destination-out' : 'source-over';
-  g.fillStyle = IT.color;
-  g.beginPath(); g.arc(x, y, IT.size / 2, 0, Math.PI * 2); g.fill();
-  g.restore();
-}
-function itFlood(temp, sx, sy, corHex, tol) {
-  const g = temp.getContext('2d'), W = temp.width, H = temp.height;
-  const img = g.getImageData(0, 0, W, H), d = img.data;
-  sx = Math.max(0, Math.min(W - 1, Math.round(sx))); sy = Math.max(0, Math.min(H - 1, Math.round(sy)));
-  const si = (sy * W + sx) * 4, alvo = [d[si], d[si + 1], d[si + 2], d[si + 3]];
-  const [fr, fg, fb] = palRgbDeHex(corHex);
-  const pilha = [[sx, sy]], visto = new Uint8Array(W * H);
-  while (pilha.length) {
-    const [x, y] = pilha.pop(), vi = y * W + x;
-    if (visto[vi]) continue; visto[vi] = 1;
-    const i = vi * 4;
-    if (Math.abs(d[i] - alvo[0]) + Math.abs(d[i + 1] - alvo[1]) + Math.abs(d[i + 2] - alvo[2]) + Math.abs(d[i + 3] - alvo[3]) > tol * 4) continue;
-    d[i] = fr; d[i + 1] = fg; d[i + 2] = fb; d[i + 3] = 255;
-    if (x > 0) pilha.push([x - 1, y]); if (x < W - 1) pilha.push([x + 1, y]);
-    if (y > 0) pilha.push([x, y - 1]); if (y < H - 1) pilha.push([x, y + 1]);
-  }
-  g.putImageData(img, 0, 0);
-}
-function itAddLayer(kind) {
-  itHistPush();
-  const l = itNovaCamada(IT.next++, kind || 'raster');
-  if (l.kind === 'raster') l.canvas = itNovoCanvas();
-  else itRenderProcedural(l);
-  IT.layers.push(l); IT.active = l.id;
-  itUI(); itDraw(); commit();
-  return l;
+/* Move um elemento real entre o layout do editor e o palco (sem clonar):
+   usado para a prévia (.preview/#gl) e para o menu Add (#addMenu). */
+function itMoveReal(el, destino, estado) {
+  if (!el) return null;
+  if (destino) { const st = { parent: el.parentNode, next: el.nextSibling }; destino.append(el); return st; }
+  if (estado && estado.parent) estado.parent.insertBefore(el, estado.next);
+  return null;
 }
 function itSetMode(modo, silencioso) {
   const tools = modo === 'tools';
   document.body.classList.toggle('it-mode', tools);
   const main = document.querySelector('.main');
   if (main) main.classList.toggle('it-on', tools);
-  const nv = itEl('nodeView'), sp = itEl('splitter'), pv = document.querySelector('.preview'), iv = itEl('itView');
-  if (nv) nv.style.display = tools ? 'none' : '';
-  if (sp) sp.style.display = tools ? 'none' : '';
-  if (pv) pv.style.display = tools ? 'none' : '';
-  if (iv) iv.hidden = !tools;
+  const nv = itEl('nodeView'), sp = itEl('splitter'), iv = itEl('itView');
+  const pv = document.querySelector('.preview');
+  if (tools) {
+    itPvHome = itMoveReal(pv, itEl('itStageHost'), itPvHome);
+    itMenuHome = itMoveReal(addMenu, document.body, itMenuHome);
+    if (nv) nv.style.display = 'none';
+    if (sp) sp.style.display = 'none';
+    if (iv) iv.hidden = false;
+    const foco = (IT.focusId != null && nodes.get(IT.focusId)) || (previewId != null && nodes.get(previewId)) || outputNode() || [...nodes.values()][0];
+    if (foco) itFocus(foco.id, false); else { itHostProps(null); itFlowRender(); }
+    requestRender();
+    if (!silencioso) setStatus('Interactive Tools: os mesmos nós e controles do editor, em outra organização.');
+  } else {
+    itRestauraControles();
+    itPvHome = itMoveReal(pv, null, itPvHome) || itPvHome;
+    if (itPvHome && itPvHome.parent && pv && pv.parentNode !== itPvHome.parent) itPvHome.parent.insertBefore(pv, itPvHome.next);
+    itMenuHome = itMoveReal(addMenu, null, itMenuHome) || itMenuHome;
+    if (itMenuHome && itMenuHome.parent && addMenu && addMenu.parentNode !== itMenuHome.parent) itMenuHome.parent.insertBefore(addMenu, itMenuHome.next);
+    if (nv) nv.style.display = '';
+    if (sp) sp.style.display = '';
+    if (iv) iv.hidden = true;
+    drawLinks();
+    requestRender();
+    if (!silencioso) setStatus('Node Editor: grafo, nós e parâmetros preservados.');
+  }
   const bn = itEl('modeNodes'), bt = itEl('modeTools');
   if (bn) bn.classList.toggle('on', !tools);
   if (bt) bt.classList.toggle('on', tools);
   try { localStorage.setItem('ouroboros:ui-mode', tools ? 'tools' : 'nodes'); } catch (_) {}
-  if (tools) { itUI(); itDraw(); if (!silencioso) setStatus('Interactive Tools: mesmo projeto, sem recarregar.'); }
-  else if (!silencioso) setStatus('Node Editor: grafo e camadas preservados.');
 }
 function itAjuda() {
   const h = itEl('itHelp');
   if (!h) return;
   h.innerHTML = '<h3>Interactive Tools — guia rápido</h3><ul>' +
-    '<li><b>Move (V)</b>: arraste no canvas para mover a camada ativa; posição, escala e rotação também ficam no painel Propriedades.</li>' +
-    '<li><b>Brush (B) / Eraser (E)</b>: pinte na camada raster ativa. A pincelada aparece como <b>prévia</b> — use <b>Confirmar</b> para gravar na camada ou <b>Cancelar</b> para descartar.</li>' +
-    '<li><b>Fill (G)</b>: clique numa região para preenchê-la com a cor atual (tolerância no painel); também pede confirmação.</li>' +
-    '<li><b>Pick (I)</b>: clique no canvas para capturar a cor do composto.</li>' +
-    '<li><b>Shape (U)</b>: arraste para desenhar retângulo (Shift = elipse) como prévia; ao confirmar vira camada de forma editável.</li>' +
-    '<li><b>Text (T)</b>: clique onde o texto começa; ao confirmar vira camada de texto editável (conteúdo, tamanho e cor no painel).</li>' +
-    '<li><b>Camadas</b>: criar, duplicar, excluir, renomear (duplo clique), subir/descer, mostrar/ocultar, opacidade, blend e grupos (visibilidade/opacidade do grupo afetam os filhos).</li>' +
-    '<li><b>Histórico</b>: Desfazer/Refazer próprios deste ambiente (Ctrl+Z aqui dentro), separados do histórico do grafo, com teto de 25 estados.</li>' +
-    '<li><b>Integração</b>: “Importar resultado do nó em prévia” traz o resultado atual do grafo como camada raster; “Enviar composição ao grafo” cria um nó Image com o composto — o mesmo projeto, sem duplicar motores.</li>' +
-    '<li><b>Modos</b>: o seletor no topo alterna Node Editor ⇄ Interactive Tools sem recarregar; grafo, camadas e resultados permanecem no mesmo projeto salvo.</li></ul>' +
+    '<li>Este ambiente é uma <b>casca sobre o editor convencional</b>: os nós, parâmetros, links e o processamento são exatamente os mesmos — nada é recriado nem simplificado aqui.</li>' +
+    '<li><b>Fluxo (à esquerda)</b>: a cadeia de nós que alimenta o Output, na ordem do processamento. Clique num nó para focá-lo: a prévia central mostra o resultado dele e o painel da direita exibe <b>os controles reais daquele nó</b> (os mesmos do grafo — editar aqui é editar o nó).</li>' +
+    '<li><b>＋ Adicionar nó</b>: abre o menu Add do editor (Wheel/Gallery, com busca). O nó criado é um nó comum do projeto.</li>' +
+    '<li><b>⇥ Inserir efeito no fluxo / ＋ Inserir antes deste</b>: escolhe um efeito no menu e ele entra <b>no meio do link</b> que alimenta o nó em foco — intercepta e processa aquele fluxo. Se cancelar (Esc), o link original é restaurado.</li>' +
+    '<li><b>⏻ Bypass</b>: liga/desliga um efeito intermediário sem remover nó nem links. Em bypass, a avaliação devolve a entrada intacta (fluxo original); o botão também existe no cabeçalho do nó, nos dois ambientes, e o estado salva junto do projeto.</li>' +
+    '<li><b>Excluir nó</b>: remove o nó reconectando entrada→saída, igual à exclusão do editor.</li>' +
+    '<li><b>Todos os nós</b>: nós fora do fluxo principal; ⇥ insere um nó livre no meio do link do nó em foco/Output (mesma inserção de arrastar um nó sobre o fio).</li>' +
+    '<li><b>Alternar modos</b> (topo) não recarrega nem converte nada: grafo, nós, parâmetros, bypass e resultados ficam como estão.</li></ul>' +
     '<button class="it-btn acc" onclick="document.getElementById(\'itHelp\').hidden=true">Fechar guia</button>';
   h.hidden = !h.hidden;
 }
 function itInit() {
-  const cv = itEl('itCanvas');
-  if (!cv) return;
-  if (window.__itPending) { const p = window.__itPending; window.__itPending = null; itLoad(p); }
-  if (!IT.layers.length) { const l = itNovaCamada(IT.next++, 'raster'); l.name = 'Camada 1'; l.canvas = itNovoCanvas(); IT.layers.push(l); IT.active = l.id; }
-  document.querySelectorAll('#itTools .it-tool[data-tool]').forEach(b => b.addEventListener('click', () => itSetTool(b.dataset.tool)));
-  itEl('itHelpBtn').addEventListener('click', itAjuda);
-  itEl('itConfirm').addEventListener('click', itConfirmPending);
-  itEl('itCancel').addEventListener('click', itCancelPending);
-  itEl('itAddLayer').addEventListener('click', () => itAddLayer('raster'));
-  itEl('itAddGroup').addEventListener('click', () => itAddLayer('group'));
-  itEl('itDupLayer').addEventListener('click', () => { const l = itActive(); if (!l) return; itHistPush(); const c = itNovaCamada(IT.next++, l.kind); Object.assign(c, l, { id: c.id, name: l.name + ' cópia', canvas: null }); if (l.kind === 'raster') { c.canvas = itNovoCanvas(); c.canvas.getContext('2d').drawImage(itEnsureCanvas(l), 0, 0); } else itRenderProcedural(c); IT.layers.splice(IT.layers.indexOf(l) + 1, 0, c); IT.active = c.id; itUI(); itDraw(); commit(); });
-  itEl('itDelLayer').addEventListener('click', () => { const l = itActive(); if (!l) return; itHistPush(); IT.layers = IT.layers.filter(x => x.id !== l.id); for (const x of IT.layers) if (x.groupId === l.id) x.groupId = null; IT.active = IT.layers.length ? IT.layers[IT.layers.length - 1].id : null; itUI(); itDraw(); commit(); });
-  itEl('itUpLayer').addEventListener('click', () => { const l = itActive(); if (!l) return; const i = IT.layers.indexOf(l); if (i >= IT.layers.length - 1) return; itHistPush(); IT.layers.splice(i, 1); IT.layers.splice(i + 1, 0, l); itUI(); itDraw(); commit(); });
-  itEl('itDownLayer').addEventListener('click', () => { const l = itActive(); if (!l) return; const i = IT.layers.indexOf(l); if (i <= 0) return; itHistPush(); IT.layers.splice(i, 1); IT.layers.splice(i - 1, 0, l); itUI(); itDraw(); commit(); });
-  itEl('itUndoBtn').addEventListener('click', itUndo);
-  itEl('itRedoBtn').addEventListener('click', itRedo);
+  if (!itEl('itView')) return;
+  if (window.__itPending) { const p = window.__itPending; window.__itPending = null; try { itLoad(p); } catch (_) {} }
   itEl('modeNodes').addEventListener('click', () => itSetMode('nodes'));
   itEl('modeTools').addEventListener('click', () => itSetMode('tools'));
-  itEl('itImportGraph').addEventListener('click', () => {
-    const tgt = (typeof previewNode === 'function' && previewNode()) || (typeof outputNode === 'function' && outputNode());
-    if (!tgt) return setStatus('Interactive Tools: nenhum nó em prévia para importar.', true);
-    const res = evalNode(tgt.id);
-    if (!res) return setStatus('Interactive Tools: o nó em prévia não produziu imagem.', true);
-    const src = readResult(res);
-    if (!IT.layers.length) { IT.w = src.width; IT.h = src.height; }
-    itHistPush();
-    const l = itNovaCamada(IT.next++, 'raster');
-    l.name = 'Do grafo: ' + (NODE_TYPES[tgt.type] ? NODE_TYPES[tgt.type].title : tgt.type);
-    l.canvas = itNovoCanvas();
-    l.canvas.getContext('2d').drawImage(src, 0, 0);
-    IT.layers.push(l); IT.active = l.id;
-    itUI(); itDraw(); commit();
-    setStatus('Resultado do grafo importado como camada.');
+  itEl('itHelpBtn').addEventListener('click', itAjuda);
+  itEl('itAddNode').addEventListener('click', () => {
+    const r = itEl('itStageWrap').getBoundingClientRect();
+    openAddMenu(r.left + r.width / 2, r.top + r.height / 2);
+    const base = (IT.focusId != null && nodes.get(IT.focusId)) || outputNode();
+    addPos = base ? { x: base.x + 240, y: base.y } : { x: 160, y: 160 };
   });
-  itEl('itSendGraph').addEventListener('click', () => {
-    const url = itCompositeCanvas().toDataURL('image/png');
-    const img = new Image();
-    img.onload = () => {
-      const id = nextImgId++;
-      imageStore.set(id, { img, dataUrl: url, name: 'Interactive Tools' });
-      const n = createNode('image', 90, 90, { imgId: id });
-      n.params.file = 'Interactive Tools (composição)';
-      previewId = n.id; markDirty(n.id); requestRender(); commit();
-      setStatus('Composição enviada ao grafo como nó Image. Alterne para Node Editor para conectar/efeitos.');
-    };
-    img.src = url;
+  const alvoLink = () => {
+    const foco = IT.focusId != null ? nodes.get(IT.focusId) : null;
+    return (foco && itLinkEntrada(foco)) || (outputNode() && itLinkEntrada(outputNode())) || null;
+  };
+  itEl('itInsertFx').addEventListener('click', () => {
+    const l = alvoLink();
+    if (l) itInserirNoLink(l);
+    else setStatus('Nada para interceptar: conecte algo ao Output (ou foque um nó com link de entrada).', true);
   });
-  itEl('itExportPng').addEventListener('click', () => itCompositeCanvas().toBlob(b => downloadBlob(b, 'interactive-tools.png')));
-  itEl('itNewDoc').addEventListener('click', () => {
-    const w = Number(prompt('Largura do documento (px)', IT.w)), h = Number(prompt('Altura do documento (px)', IT.h));
-    if (!isFinite(w) || !isFinite(h) || w < 16 || h < 16) return;
-    itHistPush();
-    IT.w = Math.min(8192, Math.round(w)); IT.h = Math.min(8192, Math.round(h));
-    for (const l of IT.layers) { const old = l.canvas; l.canvas = itNovoCanvas(); if (old && l.kind === 'raster') l.canvas.getContext('2d').drawImage(old, 0, 0); else itRenderProcedural(l); }
-    itUI(); itDraw(); commit();
+  itEl('itInsertHere').addEventListener('click', () => {
+    const l = alvoLink();
+    if (l) itInserirNoLink(l);
+    else setStatus('O nó em foco não tem link de entrada.', true);
   });
-  cv.addEventListener('pointerdown', e => {
-    const p = itPos(e), l = itActive();
-    cv.setPointerCapture(e.pointerId);
-    if (IT.tool === 'picker') {
-      const d = itCompositeCanvas().getContext('2d').getImageData(Math.max(0, Math.min(IT.w - 1, Math.round(p.x))), Math.max(0, Math.min(IT.h - 1, Math.round(p.y))), 1, 1).data;
-      IT.color = palHexDeRgb(d[0], d[1], d[2]); itRenderProps(); setStatus('Cor capturada: ' + IT.color); return;
-    }
-    if (IT.tool === 'text') {
-      IT.pending = { tipo: 'text', x: p.x, y: p.y, text: 'Texto' };
-      const temp = itNovoCanvas(), g = temp.getContext('2d');
-      g.font = '700 64px sans-serif'; g.fillStyle = IT.color; g.fillText('Texto', p.x, p.y);
-      IT.pending.temp = temp; itPendingShow('Texto aqui?'); itDraw(); return;
-    }
-    if (!l || l.kind === 'group') return setStatus('Selecione uma camada editável.', true);
-    if (IT.tool === 'move') { IT.drag = { tipo: 'move', x: p.x, y: p.y, lx: l.x || 0, ly: l.y || 0, mudou: false }; return; }
-    if (IT.tool === 'shape') { IT.drag = { tipo: 'shape', x0: p.x, y0: p.y, ellipse: !!e.shiftKey }; IT.pending = { tipo: 'shape', temp: itNovoCanvas(), shape: e.shiftKey ? 'ellipse' : 'rect', bbox: [p.x, p.y, 0, 0] }; return; }
-    if (l.kind !== 'raster') return setStatus('Pincel, borracha e balde atuam em camadas raster. Importe do grafo ou crie uma camada raster.', true);
-    if (IT.tool === 'brush' || IT.tool === 'eraser') {
-      const temp = itNovoCanvas(); temp.getContext('2d').drawImage(itEnsureCanvas(l), 0, 0);
-      IT.pending = { tipo: 'brush', layerId: l.id, temp };
-      IT.drag = { tipo: 'brush', apagar: IT.tool === 'eraser' };
-      itPincel(temp.getContext('2d'), p.x - (l.x || 0), p.y - (l.y || 0), IT.drag.apagar);
-      itPendingShow(IT.tool === 'eraser' ? 'Apagar isto?' : 'Gravar pincelada?'); itDraw(); return;
-    }
-    if (IT.tool === 'fill') {
-      const temp = itNovoCanvas(); temp.getContext('2d').drawImage(itEnsureCanvas(l), 0, 0);
-      itFlood(temp, p.x - (l.x || 0), p.y - (l.y || 0), IT.color, IT.fillTol);
-      IT.pending = { tipo: 'fill', layerId: l.id, temp };
-      itPendingShow('Aplicar preenchimento?'); itDraw();
-    }
-  });
-  cv.addEventListener('pointermove', e => {
-    if (!IT.drag) return;
-    const p = itPos(e), l = itActive();
-    if (IT.drag.tipo === 'move' && l) { l.x = IT.drag.lx + (p.x - IT.drag.x); l.y = IT.drag.ly + (p.y - IT.drag.y); IT.drag.mudou = true; itDraw(); return; }
-    if (IT.drag.tipo === 'brush' && IT.pending) { itPincel(IT.pending.temp.getContext('2d'), p.x - (l ? l.x || 0 : 0), p.y - (l ? l.y || 0 : 0), IT.drag.apagar); itDraw(); return; }
-    if (IT.drag.tipo === 'shape' && IT.pending) {
-      const d = IT.drag, g = IT.pending.temp.getContext('2d');
-      g.clearRect(0, 0, IT.w, IT.h); g.fillStyle = IT.color;
-      const x = Math.min(d.x0, p.x), y = Math.min(d.y0, p.y), w = Math.abs(p.x - d.x0), h = Math.abs(p.y - d.y0);
-      IT.pending.bbox = [x, y, w, h]; IT.pending.shape = d.ellipse ? 'ellipse' : 'rect';
-      if (d.ellipse) { g.beginPath(); g.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2); g.fill(); } else g.fillRect(x, y, w, h);
-      itPendingShow('Criar forma?'); itDraw();
-    }
-  });
-  const fim = () => { if (IT.drag && IT.drag.tipo === 'move' && IT.drag.mudou) { itHistPush(); commit(); itRenderProps(); } IT.drag = null; };
-  cv.addEventListener('pointerup', fim);
-  cv.addEventListener('pointercancel', fim);
-  document.addEventListener('keydown', e => {
+  window.__itCommit = () => {
     if (!document.body.classList.contains('it-mode')) return;
-    const tag = (e.target && e.target.tagName) || '';
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); e.stopPropagation(); e.shiftKey ? itRedo() : itUndo(); return; }
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); e.stopPropagation(); itRedo(); return; }
-    const k = e.key.toLowerCase();
-    const mapa = { v: 'move', b: 'brush', e: 'eraser', g: 'fill', i: 'picker', u: 'shape', t: 'text' };
-    if (mapa[k]) itSetTool(mapa[k]);
-    if (e.key === 'Escape') itCancelPending();
-  }, true);
+    const sel = [...selected][0];
+    if (sel != null && sel !== IT.focusId && nodes.has(sel)) itFocus(sel, false);
+    else itFlowRender();
+  };
   let pref = 'nodes';
   try { pref = localStorage.getItem('ouroboros:ui-mode') || 'nodes'; } catch (_) {}
   itSetMode(pref === 'tools' ? 'tools' : 'nodes', true);
-  itUI(); itDraw();
 }
 itInit();
+
 
 
 /* =====================================================================
