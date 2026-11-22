@@ -70,6 +70,11 @@ const { GLYPHS_AM, GLYPH_ID_AM, AM24_FORMAS, am24Ops } = new Function(codigo)();
   ok(html.includes("if (n.type === 'arrayMachine') amGlyphGridMount(n, body)"), 'seletor montado no painel do Array Machine');
   ok(html.includes("background:#171310") || html.includes("background:#241a12") || html.includes('#171310'), 'miniaturas em fundo neutro escuro');
   ok(/function amDesenhaMini\(cv, id\)/.test(html), 'miniaturas desenhadas por Path2D das mesmas operações');
+  /* 1.14.1: a grade não pode mais inflar o painel nem quebrar os rótulos */
+  ok(html.includes('max-height:252px;overflow-y:auto'), 'grade com altura máxima e rolagem própria');
+  ok(/white-space:nowrap;overflow:hidden;text-overflow:ellipsis/.test(html), 'rótulos em uma linha com reticências (nome completo no tooltip)');
+  ok(html.includes('cell.title = rotulo'), 'nome completo acessível no tooltip da célula');
+  ok(html.includes('AM_GRID_ABERTO') && html.includes('am-grid-toggle'), 'botão de recolher/mostrar a grade (estado só de UI)');
 }
 
 /* ---------- 6. compatibilidade com o nó existente ---------- */

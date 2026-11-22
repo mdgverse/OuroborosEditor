@@ -173,3 +173,13 @@ pinwheel).
   trecho público lido) e `mozayk.design` não foram integralmente acessíveis;
   o inventário acima cobre **toda** a Node Library pública documentada, e o
   que não pôde ser confirmado está listado como limitação, sem invenção.
+
+## 6. Correção 1.14.1 — layout do seletor de formas
+
+Relatado pelo usuário (print): a grade de 41 formas inflava o painel do nó
+Machine e os rótulos quebravam em várias linhas, com células de alturas
+diferentes. Correção: grade com altura máxima (252 px) e rolagem própria,
+rótulos em uma única linha com reticências (nome completo no tooltip da
+célula), título de uma linha e botão ▾/▸ para recolher a grade (estado só
+de interface, por nó, fora dos dados do projeto). Geometria, ids e
+comportamento de seleção não mudaram.
