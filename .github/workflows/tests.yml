@@ -111,6 +111,12 @@ jobs:
         run: node tests/nala.test.mjs
       - name: Ctrl+S (modal de destino) + Workflows do usuário
         run: node tests/save-destination.test.mjs
+      - name: Array Machine · 24 formas novas (ids 17–40, SDF e seletor)
+        run: node tests/array-24.test.mjs
+      - name: Palette + Apply LUT (parsers .cube/.3dl e matemática de cor)
+        run: node tests/palette-lut.test.mjs
+      - name: Interactive Tools (camadas, histórico, modos e integração)
+        run: node tests/interactive-tools.test.mjs
       - name: Versão (VERSION = index.html = APK)
         run: node tests/version.test.mjs
       - name: Higiene (código morto, CSS sem uso, reference/ fora)
