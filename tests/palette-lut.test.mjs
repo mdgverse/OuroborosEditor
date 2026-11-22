@@ -12,7 +12,7 @@ const trecho = (ini, fim) => {
   return html.slice(a, b);
 };
 const puro = trecho('/* LUTPAL_PURO_INI */', '/* LUTPAL_PURO_FIM */');
-const F = new Function(puro + '\nreturn { lutParseCube, lutParse3dl, lutParse, lutAmostra, lutAmostra1d, palRgbDeHex, palHexDeRgb, palHsl, palRgbDeHsl, palOrdena, palExtrai, palGradiente, palRemapPixel, palCoresDaTira, palGpl };')();
+const F = new Function(puro + '\nreturn { lutParseCube, lutParse3dl, lutParse, lutAmostra, lutAmostra1d, palRgbDeHex, palHexDeRgb, palHsl, palRgbDeHsl, palOrdena, palExtrai, palGradiente, palCoresDaTira, palGpl, palOklab, palPreparaPaleta, palMapeiaPixel };')();
 
 /* ---------- 1. .cube 3D: parse + identidade ---------- */
 {
@@ -78,17 +78,6 @@ const F = new Function(puro + '\nreturn { lutParseCube, lutParse3dl, lutParse, l
   ok(F.palExtrai(transp, 4, 'exact', 'freq').length === 1, 'pixels transparentes ignorados');
 }
 
-/* ---------- 6. remap de pixel ---------- */
-{
-  const out = F.palRemapPixel(200, 50, 50, [200, 50, 50], [43, 111, 212], { tol: 30, minSat: 20, feather: 0.2, preservaLum: true });
-  const [h] = F.palHsl(out[0], out[1], out[2]);
-  ok(Math.abs(h - 216) < 25, 'remap: vermelho → matiz do azul alvo', Math.round(h));
-  const fora = F.palRemapPixel(50, 200, 50, [200, 50, 50], [43, 111, 212], { tol: 30, minSat: 20, feather: 0.2, preservaLum: true });
-  ok(JSON.stringify(fora) === '[50,200,50]', 'remap: verde (fora da tolerância) intocado');
-  const cinza = F.palRemapPixel(120, 120, 120, [200, 50, 50], [43, 111, 212], { tol: 30, minSat: 20, feather: 0.2, preservaLum: true });
-  ok(JSON.stringify(cinza) === '[120,120,120]', 'remap: cinza abaixo da saturação mínima intocado');
-}
-
 /* ---------- 7. tira de paleta + .gpl ---------- */
 {
   const w = 8, h = 4, dados = new Uint8ClampedArray(w * h * 4);
@@ -109,6 +98,79 @@ const F = new Function(puro + '\nreturn { lutParseCube, lutParse3dl, lutParse, l
   ok(html.includes("FILE('lutFile', 'LUT file (.cube, .3dl)'"), 'Apply LUT: arquivo .cube/.3dl');
   ok(html.includes("action: 'palExportGpl'"), 'export .gpl ligado nos nós de paleta');
   ok(/cat: 'color'/.test(trecho('palette: {', '},')), 'paleta na categoria Color');
+}
+
+/* ---------- 9. Palette Remap reconfigurado (1.16.0): paleta inteira ---------- */
+{
+  const paleta = F.palPreparaPaleta([{ r: 200, g: 40, b: 40 }, { r: 40, g: 80, b: 220 }, { r: 240, g: 200, b: 60 }]);
+  ok(paleta.length === 3 && paleta.every(c => isFinite(c.L + c.a + c.bb + c.h)), 'paleta preparada com OKLab/HSL');
+
+  /* tons: a luz do pixel manda — sombra continua sombra, luz continua luz */
+  const sombra = F.palMapeiaPixel(70, 20, 20, paleta, { modo: 'tons', preserva: 1, neutros: 0.35 });
+  const luz = F.palMapeiaPixel(235, 190, 190, paleta, { modo: 'tons', preserva: 1, neutros: 0.35 });
+  const lSombra = F.palHsl(sombra[0], sombra[1], sombra[2])[2], lLuz = F.palHsl(luz[0], luz[1], luz[2])[2];
+  ok(Math.abs(lSombra - F.palHsl(70, 20, 20)[2]) < 0.03, 'tons: lightness da sombra preservada', lSombra);
+  ok(Math.abs(lLuz - F.palHsl(235, 190, 190)[2]) < 0.03 && lLuz > lSombra + 0.5, 'tons: gradiente de luz preservado (estrutura/sombras)');
+
+  /* distribuição cromática: cada pixel adota o matiz de alguma cor da paleta */
+  const huesPaleta = paleta.map(c => Math.round(c.h));
+  for (const px of [[200, 60, 50], [40, 90, 200], [230, 190, 80], [90, 160, 90]]) {
+    const out = F.palMapeiaPixel(px[0], px[1], px[2], paleta, { modo: 'tons', preserva: 1, neutros: 0 });
+    const h = Math.round(F.palHsl(out[0], out[1], out[2])[0]);
+    ok(huesPaleta.some(ph => Math.abs(h - ph) < 14 || Math.abs(h - ph) > 346), 'pixel ' + px.join(',') + ' adota um matiz da paleta', h + ' vs ' + huesPaleta.join('/'));
+  }
+
+  /* neutros: cinza não vira cor forte quando "manter neutros" está alto */
+  const cinzaSolido = F.palMapeiaPixel(110, 110, 110, paleta, { modo: 'tons', preserva: 1, neutros: 1 });
+  ok(Math.max(...cinzaSolido) - Math.min(...cinzaSolido) <= 2, 'neutros 100%: cinza continua cinza', cinzaSolido);
+  const cinzaLivre = F.palMapeiaPixel(110, 110, 110, paleta, { modo: 'tons', preserva: 1, neutros: 0 });
+  ok(Math.max(...cinzaLivre) - Math.min(...cinzaLivre) > 20, 'neutros 0%: cinza pode ganhar a cor da paleta', cinzaLivre);
+
+  /* exatas: sai a cor da paleta, re-sombreada pela luz do pixel */
+  const soVermelha = F.palPreparaPaleta([{ r: 200, g: 40, b: 40 }]);
+  const escuro = F.palMapeiaPixel(60, 60, 70, soVermelha, { modo: 'exatas', preserva: 1, neutros: 0.35 });
+  const claro = F.palMapeiaPixel(210, 210, 220, soVermelha, { modo: 'exatas', preserva: 1, neutros: 0.35 });
+  ok(escuro[0] > escuro[1] && claro[0] > claro[1], 'exatas: identidade da cor da paleta nos dois extremos');
+  ok(escuro[0] < claro[0], 'exatas: pixel escuro sombreia a cor, pixel claro clareia (detalhe preservado)', escuro[0] + '<' + claro[0]);
+
+  /* trocar a paleta muda o resultado (atualização pelo socket) */
+  const outra = F.palPreparaPaleta([{ r: 30, g: 180, b: 90 }, { r: 20, g: 40, b: 160 }]);
+  const a1 = F.palMapeiaPixel(200, 60, 50, paleta, { modo: 'tons', preserva: 1, neutros: 0.35 });
+  const a2 = F.palMapeiaPixel(200, 60, 50, outra, { modo: 'tons', preserva: 1, neutros: 0.35 });
+  ok(JSON.stringify(a1) !== JSON.stringify(a2), 'trocar a paleta muda o mapeamento');
+
+  /* muitas cores / extremos: sempre finito e dentro de 0–255 */
+  const grande = F.palPreparaPaleta(Array.from({ length: 24 }, (_, i) => ({ r: (i * 47) % 256, g: (i * 91) % 256, b: (i * 149) % 256 })));
+  let tudoOk = true;
+  for (const px of [[0, 0, 0], [255, 255, 255], [12, 200, 99], [250, 5, 130], [77, 77, 79]])
+    for (const modo of ['tons', 'exatas']) {
+      const out = F.palMapeiaPixel(px[0], px[1], px[2], grande, { modo, preserva: 1, neutros: 0.35 });
+      if (!out.every(v => isFinite(v) && v >= 0 && v <= 255)) tudoOk = false;
+    }
+  ok(tudoOk, 'paleta de 24 cores, extremos de luz: saída sempre válida');
+  ok(JSON.stringify(F.palMapeiaPixel(10, 20, 30, [], { modo: 'tons' })) === '[10,20,30]', 'sem paleta: pixel intacto');
+}
+
+/* ---------- 10. tira sem códigos continua comunicando a paleta ---------- */
+{
+  const w = 8, h = 72, dados = new Uint8ClampedArray(w * h * 4);   // altura da tira sem códigos
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) dados.set(x < 4 ? [255, 0, 0, 255] : [0, 0, 255, 255], (y * w + x) * 4);
+  const cores = F.palCoresDaTira(dados, w, h);
+  ok(cores.length === 2 && cores[0].r === 255 && cores[1].b === 255, 'tira só visual (sem texto) ainda alimenta o Remap pela linha central');
+}
+
+/* ---------- 11. reconfiguração no HTML ---------- */
+{
+  ok(html.includes('palTiraCanvas(n.runtime.palCores, false)'), 'Palette From Image desenha a tira SEM códigos');
+  ok(/if \(mostrarCodigos\) \{[\s\S]{0,200}fillText/.test(html), 'o texto dos códigos só existe no modo com códigos (outros nós)');
+  ok(html.includes('function palCoresParaRemap(n, tiraRes)') && html.includes('fonte.runtime.palCores'), 'Remap lê primeiro as cores extraídas pelo nó ligado');
+  ok(html.includes('function runPaletteRemapNode') && !html.includes('PAL_FALLBACK'), 'sem paleta de reserva: sem paleta ligada, não inventa cores');
+  ok(html.includes('palMapeiaPixel(d[i], d[i + 1], d[i + 2], paleta, op)'), 'o runtime usa o mapeamento por paleta inteira');
+  const remap = html.slice(html.indexOf('function runPaletteRemapNode'), html.indexOf('function runApplyLutNode'));
+  ok(!remap.includes('palHexDeRgb') && !remap.includes('Variant slot'), 'nada de códigos/variante única na interface do Remap');
+  const defRemap = html.slice(html.indexOf('paletteRemap: {'), html.indexOf('applyLut: {'));
+  ok(!defRemap.includes("COL('fonte'") && !defRemap.includes("'slot'"), 'controles antigos (fonte/slot) saíram da interface');
+  ok(defRemap.includes("'preserva'") && defRemap.includes("'neutros'") && defRemap.includes("'mix'"), 'controles novos: preservar luz, neutros e mix');
 }
 
 process.exit(resumo() ? 0 : 1);

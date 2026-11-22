@@ -192,3 +192,25 @@ o editor convencional: mesmos nós/controles/menu Add/prévia (elementos
 reais movidos, não clonados), inserção de efeitos no meio dos links pelos
 mecanismos do editor e bypass por nó avaliado no evalNode. Detalhes em
 docs/interactive-tools.md.
+
+## 8. Reconfiguração 1.16.0 — Palette Remap por paleta de referência + Palette From Image visual
+
+- **Palette Remap** não é mais "cor-fonte → um slot": cada pixel procura a
+  cor da paleta mais próxima no plano cromático OKLab (peso 0,35 para a
+  luz, respeitando a relação tonal) e adota a identidade dela. Dois métodos:
+  *Palette tones* (matiz/saturação da paleta + luz do pixel — preserva
+  formas, sombras e texturas) e *Exact palette colors* (a cor exata da
+  paleta re-sombreada pela razão de luz do pixel). Controles: preservar
+  luz, manter neutros (pixel cinza não ganha cor forte) e Mix; máscara
+  opcional continua. Cache por cor quantizada (5 bits/canal) para imagens
+  grandes.
+- A paleta é lida **primeiro** das cores extraídas pelo nó ligado no
+  socket Palette (runtime.palCores — o caminho do Palette From Image) e,
+  na falta, das amostras da tira ligada. Sem paleta, a imagem atravessa
+  intacta com aviso — a paleta de reserva da 1.14 foi removida.
+- **Palette From Image**: a tira de saída agora é só visual (amostras sem
+  nenhum código HEX/RGB abaixo). Os dados não mudam: quem consome a tira
+  lê a linha central das amostras, e o caminho principal é o
+  runtime.palCores — trocar a extração suja a cadeia e atualiza o Remap.
+- Projetos antigos do Remap (parâmetros fonte/slot/tol…) abrem iguais: as
+  chaves velhas são ignoradas e os padrões novos assumem.
