@@ -619,7 +619,7 @@ body.it-mode #tlPanel{display:none}
 
 /* Versão do editor — o arquivo VERSION na raiz é a fonte da verdade
    (o build do APK usa o mesmo número no versionName e falha se divergir). */
-const APP_VERSION = '1.14.0';
+const APP_VERSION = '1.14.1';
 /* tooltip do botão da marca: só o nome do produto (a versão é metadado, não entra na marca) */
 {
   const marca = document.getElementById('brandBtn');
@@ -25249,27 +25249,43 @@ function amDesenhaMini(cv, id) {
   else { g.scale(1, -1); g.font = 'bold 0.62px sans-serif'; g.textAlign = 'center'; g.fillText('SVG', 0, 0.22); }
   g.restore();
 }
+const AM_GRID_ABERTO = new Map();   // 1.14.1: grade recolhida/aberta por nó (só UI, não vai ao projeto)
 function amGlyphGridMount(n, body) {
   if (document.getElementById('am24Css') == null) {
     const st = document.createElement('style');
     st.id = 'am24Css';
     st.textContent = [
       '.am-grid-wrap{margin:6px 0 2px;border-top:1px dashed var(--line,#333);padding-top:6px}',
-      '.am-grid-tit{font-size:11px;color:var(--text-muted,#9aa3b0);margin-bottom:5px}',
+      '.am-grid-head{display:flex;align-items:center;gap:6px;margin-bottom:5px}',
+      '.am-grid-tit{flex:1;min-width:0;font-size:11px;color:var(--text-muted,#9aa3b0);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+      '.am-grid-toggle{flex:none;background:var(--panel2,#232830);border:1px solid var(--line,#333);color:#c8cfd8;border-radius:6px;min-width:26px;min-height:22px;font-size:11px;cursor:pointer}',
       '.am-grid-tons{display:flex;gap:4px;margin-bottom:6px}',
       '.am-grid-tons button{flex:1;background:var(--panel2,#232830);border:1px solid var(--line,#333);color:#c8cfd8;border-radius:6px;min-height:26px;font-size:11px;cursor:pointer}',
       '.am-grid-tons button.on{background:var(--accent,#3f6fd8);border-color:var(--accent,#3f6fd8);color:#fff}',
-      '.am-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:4px}',
-      '.am-cell{background:#171310;border:1px solid var(--line,#333);border-radius:6px;padding:2px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:1px}',
+      '.am-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:3px;max-height:252px;overflow-y:auto;padding:1px}',
+      '.am-cell{background:#171310;border:1px solid var(--line,#333);border-radius:6px;padding:2px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:1px;min-width:0}',
       '.am-cell canvas{width:100%;height:auto;display:block}',
-      '.am-cell span{font-size:8px;line-height:1.1;color:#9aa3b0;text-align:center;max-width:100%;overflow:hidden}',
+      '.am-cell span{font-size:8px;line-height:1.15;color:#9aa3b0;text-align:center;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
       '.am-cell.on{border-color:#ff7a1a;box-shadow:0 0 0 1px #ff7a1a inset}',
     ].join('\n');
     document.head.append(st);
   }
   const wrap = E('div', 'am-grid-wrap');
   wrap.dataset.pkey = 'glyphGrid';
-  wrap.append(E('div', 'am-grid-tit', 'Array shapes — tap a shape to apply it to the selected tone (the 24 new ones are marked · 24):'));
+  /* 1.14.1: cabeçalho curto de uma linha + botão de recolher; a grade rola
+     por dentro (max-height) e os rótulos não quebram mais o painel. */
+  const head = E('div', 'am-grid-head');
+  head.append(E('div', 'am-grid-tit', 'Array shapes · new: · 24'));
+  const btnToggle = E('button', 'am-grid-toggle', '▾');
+  btnToggle.type = 'button';
+  btnToggle.title = 'Recolher/mostrar a grade de formas';
+  head.append(btnToggle);
+  const corpo = E('div', 'am-grid-corpo');
+  let aberto = AM_GRID_ABERTO.get(n.id) !== false;
+  const pintaToggle = () => { corpo.style.display = aberto ? '' : 'none'; btnToggle.textContent = aberto ? '▾' : '▸'; };
+  btnToggle.addEventListener('pointerdown', e => e.stopPropagation());
+  btnToggle.addEventListener('click', e => { e.stopPropagation(); aberto = !aberto; AM_GRID_ABERTO.set(n.id, aberto); pintaToggle(); });
+  wrap.append(head, corpo);
   const tons = E('div', 'am-grid-tons');
   let tomAtivo = 0;
   const grade = E('div', 'am-grid');
@@ -25306,7 +25322,8 @@ function amGlyphGridMount(n, body) {
     grade.append(cell);
     requestAnimationFrame(() => amDesenhaMini(cv, id));
   }
-  wrap.append(tons, grade);
+  corpo.append(tons, grade);
+  pintaToggle();
   const anchor = body.querySelector('[data-pkey="glyph3"]');
   if (anchor) anchor.after(wrap); else body.append(wrap);
   marca();
