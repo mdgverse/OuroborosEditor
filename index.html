@@ -464,6 +464,13 @@ body.it-mode #tlPanel{display:none}
           <div id="itFlow"></div>
         </div>
         <div class="it-sec">
+          <h4>Camadas (Layer Position)</h4>
+          <div id="itLayersCtx"></div>
+          <div class="it-btns" style="margin-top:6px">
+            <button class="it-btn acc" id="itFxLayer" type="button">＋ Efeito na camada selecionada…</button>
+          </div>
+        </div>
+        <div class="it-sec">
           <h4>Adicionar / inserir</h4>
           <div class="it-btns">
             <button class="it-btn acc" id="itAddNode" type="button">＋ Adicionar nó (menu do editor)</button>
@@ -630,7 +637,7 @@ body.it-mode #tlPanel{display:none}
 
 /* Versão do editor — o arquivo VERSION na raiz é a fonte da verdade
    (o build do APK usa o mesmo número no versionName e falha se divergir). */
-const APP_VERSION = '1.16.0';
+const APP_VERSION = '1.17.0';
 /* tooltip do botão da marca: só o nome do produto (a versão é metadado, não entra na marca) */
 {
   const marca = document.getElementById('brandBtn');
@@ -25071,16 +25078,21 @@ function vsColaNosNoGrafo() {
 function vsColaImagemNoGrafo(file) {
   // if an Image node is selected, replaces its image; otherwise creates a new one
   let n = [...selected].map(id => nodes.get(id)).find(x => x && x.type === 'image');
+  let criado = false;
   if (!n) {
     const r = viewEl.getBoundingClientRect();
     const c = screenToWorld(r.left + r.width / 2, r.top + r.height / 2);
     n = createNode('image', c.x - 100, c.y - 60);
+    criado = true;
     selected.clear();
     selected.add(n.id);
     refreshSelection();
     drawLinks();
   }
   loadImageFile(n, file);
+  /* 1.17.0: imagem nova colada entra automaticamente no Layer Position
+     (substituir a imagem de um nó existente não mexe nas conexões). */
+  if (criado && typeof itAutoLayerPosition === 'function') itAutoLayerPosition(n);
   setStatus('Image pasted from the clipboard.');
 }
 /* --- HOME: the paste starts a new PROJECT --- */
@@ -25119,7 +25131,7 @@ async function vsColaNos(clip) {
 /* on HOME the image becomes a new document (same path as "Open file…") */
 async function vsColaImagem(file) {
   await vsSalvaProjetoAtual();
-  await ssOpenImageFile(file);                 // Image → Output, named after the file
+  await ssOpenImageFile(file, { autoCamadas: true });   // 1.17.0: projeto novo já nasce organizado: Image → Layer Position (Layer 2) → Output
   setStatus('Image pasted' + ' — ' + 'new project created' + '.');
 }
 /* --- HOME decides --- */
@@ -34581,15 +34593,18 @@ fileInput.addEventListener('change', () => {
     const sel = [...selected].map(id => nodes.get(id)).find(x => x && x.type === 'image');
     n = sel || null;
   }
+  let criadoImp = false;
   if (!n) {
     const c = screenToWorld(viewEl.getBoundingClientRect().left + viewEl.clientWidth / 2, viewEl.getBoundingClientRect().top + viewEl.clientHeight / 2);
     n = createNode('image', c.x - 100, c.y - 60);
+    criadoImp = true;
     selected.clear(); selected.add(n.id);
     refreshSelection();
     drawLinks();
   }
   delete fileInput.dataset.target;
   loadImageFile(n, f);
+  if (criadoImp && typeof itAutoLayerPosition === 'function') itAutoLayerPosition(n);   // 1.17.0: importar também organiza em camadas
   fileInput.value = '';
 });
 
@@ -37456,13 +37471,20 @@ window.startScreenOpenTab = startScreenOpenTab;
 const SS_OPEN_ACCEPT = 'image/png,image/jpeg,image/webp,image/gif,image/bmp,.png,.jpg,.jpeg,.webp,.gif,.bmp,.json,application/json';
 const SS_IMG_RE = /\.(png|jpe?g|webp|gif|bmp)$/i;
 function ssIsImage(f) { return (f.type || '').startsWith('image/') || SS_IMG_RE.test(f.name || ''); }
-async function ssOpenImageFile(f) {
+async function ssOpenImageFile(f, opcoes = {}) {
   await ssWhenReady();
   tabsSnapshotAtual();           // 2.9.84: the project that leaves stays saved in its tab
   restoreGraph({ nodes: [], links: [], previewId: null });
   const a = createNode('image', 60, 140);
   const o = createNode('output', 600, 140);
-  connect(a.id, o.id, 0);
+  if (opcoes.autoCamadas) {
+    /* 1.17.0: primeira imagem colada num projeto novo já entra como camada */
+    const lp = createNode('layers', 330, 140);
+    connect(a.id, lp.id, 1);      // Layer 2 (a Layer 1 é a base)
+    connect(lp.id, o.id, 0);
+  } else {
+    connect(a.id, o.id, 0);
+  }
   previewId = o.id;
   requestRender();
   loadImageFile(a, f);
@@ -40888,6 +40910,14 @@ function itCadeia(linkList, targetId, prefDe) {
   }
   return ordem;
 }
+/* Próxima entrada de camada livre a partir da Layer 2 (índice 1): a Layer 1
+   fica como base do Layer Position. Pode devolver >= total (expandir). */
+function itProximoSlotCamada(usados, total) {
+  const s = new Set(usados || []);
+  let i = 1;
+  while (s.has(i)) i++;
+  return i;
+}
 /* Valor que atravessa um nó em bypass: a entrada principal intacta. */
 function itBypassValor(def, ins) {
   let idx = (def && def.preferIn) != null ? def.preferIn : 0;
@@ -40898,7 +40928,7 @@ function itBypassValor(def, ins) {
 }
 /* IT2_PURO_FIM */
 
-let IT = { focusId: null, legacy: null };
+let IT = { focusId: null, legacy: null, layerCtx: null };   // layerCtx: { lpId, input } — camada em edição contextual
 let itHosted = null;      // { n, body } — o .nbody real do nó, hospedado no painel
 let itPvHome = null;      // lugar original do elemento .preview
 let itMenuHome = null;    // lugar original do #addMenu
@@ -40922,6 +40952,33 @@ function itLoad(data) {
   if (document.body && document.body.classList.contains('it-mode')) { itFlowRender(); if (IT.focusId != null && nodes.has(IT.focusId)) itFocus(IT.focusId, false); }
 }
 function itTitulo(n) { return n ? ((NODE_TYPES[n.type] || {}).title || n.type) : ''; }
+/* 1.17.0 — gerenciamento automático de camadas: uma imagem nova (colar/
+   importar) entra sozinha no Layer Position do projeto — cria o nó se não
+   existir (e liga ao Output), reaproveita se existir, e ocupa a próxima
+   entrada livre a partir da Layer 2, sem tocar nas já ligadas. Tudo com
+   createNode/connect/addLayer reais; nada de sistema paralelo. */
+function itAutoLayerPosition(imgNode) {
+  if (!imgNode || imgNode.type !== 'image') return null;
+  if (links.some(l => l.from === imgNode.id)) return null;   // já encaminhada
+  let lp = [...nodes.values()].find(n => n.type === 'layers');
+  if (!lp) {
+    lp = createNode('layers', Math.round(imgNode.x + 300), Math.round(imgNode.y));
+    const out = outputNode();
+    if (out && !linkTo(out.id, 0)) connect(lp.id, out.id, 0);
+  }
+  if (!links.some(l => l.from === lp.id)) {
+    const out = outputNode();
+    if (out && !linkTo(out.id, 0)) connect(lp.id, out.id, 0);
+  }
+  let idx = itProximoSlotCamada(links.filter(l => l.to === lp.id).map(l => l.input), layerList(lp).length);
+  while (layerList(lp).length <= idx) addLayer(lp);
+  connect(imgNode.id, lp.id, idx);
+  imgNode.x = lp.x - 300; imgNode.y = lp.y + (idx - 1) * 180 - 90;
+  if (imgNode.el) { imgNode.el.style.left = imgNode.x + 'px'; imgNode.el.style.top = imgNode.y + 'px'; }
+  drawLinks(); markDirty(lp.id); commit(); requestRender();
+  if (typeof itFlowRender === 'function' && document.body.classList.contains('it-mode')) itFlowRender();
+  return { lp, idx };
+}
 function itLinkEntrada(n) {
   if (!n) return null;
   const def = NODE_TYPES[n.type] || {};
@@ -41043,6 +41100,70 @@ function itFlowRender() {
   }
   const bb = itEl('itBypBtn');
   if (bb && itHosted) bb.classList.toggle('on', !!itHosted.n.bypass);
+  itLayersRender();
+}
+/* 1.17.0 — camadas contextuais: lista as entradas do(s) Layer Position com
+   a fonte de cada uma; selecionar uma camada foca a cadeia dela e o botão
+   de efeito insere no link que alimenta exatamente aquela entrada. Os
+   efeitos já inseridos na camada aparecem com bypass próprio (nodeSetBypass). */
+function itLayersRender() {
+  const box = itEl('itLayersCtx');
+  if (!box) return;
+  box.innerHTML = '';
+  const lps = [...nodes.values()].filter(n => n.type === 'layers');
+  if (!lps.length) {
+    box.append(E('div', 'it-empty', 'Nenhum Layer Position neste projeto. Ao colar ou importar uma imagem, ele é criado e preenchido automaticamente.'));
+    return;
+  }
+  for (const lp of lps) {
+    const list = layerList(lp);
+    for (let i = 0; i < list.length; i++) {
+      const l = links.find(x => x.to === lp.id && x.input === i);
+      const sel = IT.layerCtx && IT.layerCtx.lpId === lp.id && IT.layerCtx.input === i;
+      const item = E('div', 'it-flow-item' + (sel ? ' on' : ''));
+      item.append(E('span', 'idx', String(i + 1)));
+      const nm = E('div', 'nm');
+      nm.append(E('b', '', layerRotulo(lp, i)), E('span', '', l ? 'fonte: ' + itTitulo(nodes.get(l.from)) : 'vazia'));
+      item.append(nm);
+      const bFx = E('button', 'mini', '＋'); bFx.type = 'button';
+      bFx.title = l ? 'Adicionar efeito só nesta camada' : 'Camada vazia';
+      bFx.disabled = !l;
+      bFx.addEventListener('click', e => { e.stopPropagation(); IT.layerCtx = { lpId: lp.id, input: i }; itInserirNoLink(links.find(x => x.to === lp.id && x.input === i)); });
+      item.append(bFx);
+      item.addEventListener('click', () => {
+        IT.layerCtx = { lpId: lp.id, input: i };
+        if (l) itFocus(l.from, false);
+        itLayersRender(); itFlowRender();
+        if (l) requestRender();
+      });
+      box.append(item);
+    }
+    /* cadeia da camada selecionada deste Layer Position */
+    if (IT.layerCtx && IT.layerCtx.lpId === lp.id) {
+      const lIn = links.find(x => x.to === lp.id && x.input === IT.layerCtx.input);
+      if (lIn) {
+        box.append(E('div', 'it-link-arrow', 'cadeia desta camada (fonte → efeitos → Layer Position)'));
+        const cadeia = itCadeia(links, lIn.from, id => { const nd = nodes.get(id); return nd ? ((NODE_TYPES[nd.type] || {}).preferIn ?? 0) : 0; });
+        for (const id of cadeia) {
+          const n = nodes.get(id);
+          if (!n) continue;
+          const def = NODE_TYPES[n.type] || {};
+          const row = E('div', 'it-flow-item' + (id === IT.focusId ? ' on' : '') + (n.bypass ? ' bypassed' : ''));
+          const nm = E('div', 'nm');
+          nm.append(E('b', '', def.title || n.type), E('span', '', n.type + (n.bypass ? ' · bypass' : '')));
+          row.append(nm);
+          if (def.inputs && def.inputs.length && n.type !== 'output') {
+            const bb = E('button', 'mini' + (n.bypass ? ' on' : ''), '⏻'); bb.type = 'button';
+            bb.title = n.bypass ? 'Efeito desativado nesta camada — clique para reativar' : 'Desativar este efeito (bypass) só nesta camada';
+            bb.addEventListener('click', e => { e.stopPropagation(); nodeSetBypass(n, !n.bypass); });
+            row.append(bb);
+          }
+          row.addEventListener('click', () => itFocus(id));
+          box.append(row);
+        }
+      }
+    }
+  }
 }
 /* Insere um nó NOVO no meio de um link existente, usando o menu Add real:
    remove o link (como o arrastar de fio faz), abre o menu com o pending de
@@ -41123,6 +41244,8 @@ function itAjuda() {
     '<li><b>⏻ Bypass</b>: liga/desliga um efeito intermediário sem remover nó nem links. Em bypass, a avaliação devolve a entrada intacta (fluxo original); o botão também existe no cabeçalho do nó, nos dois ambientes, e o estado salva junto do projeto.</li>' +
     '<li><b>Excluir nó</b>: remove o nó reconectando entrada→saída, igual à exclusão do editor.</li>' +
     '<li><b>Todos os nós</b>: nós fora do fluxo principal; ⇥ insere um nó livre no meio do link do nó em foco/Output (mesma inserção de arrastar um nó sobre o fio).</li>' +
+    '<li><b>Camadas automáticas</b>: colar (Ctrl+V) ou importar uma imagem cria o Layer Position se ele não existir (ligado ao Output) e coloca a imagem na próxima entrada livre a partir da Layer 2 — sem sobrescrever as já ligadas. Se ele já existir, é reaproveitado.</li>' +
+    '<li><b>Efeito numa camada só</b>: na seção Camadas, selecione a camada (Layer 2, 3…) e use <b>＋ Efeito na camada selecionada</b>: o efeito entra no link que alimenta só aquela camada; as outras não são tocadas. A cadeia da camada (fonte → efeitos) aparece com bypass ⏻ individual.</li>' +
     '<li><b>Alternar modos</b> (topo) não recarrega nem converte nada: grafo, nós, parâmetros, bypass e resultados ficam como estão.</li></ul>' +
     '<button class="it-btn acc" onclick="document.getElementById(\'itHelp\').hidden=true">Fechar guia</button>';
   h.hidden = !h.hidden;
@@ -41152,6 +41275,12 @@ function itInit() {
     const l = alvoLink();
     if (l) itInserirNoLink(l);
     else setStatus('O nó em foco não tem link de entrada.', true);
+  });
+  itEl('itFxLayer').addEventListener('click', () => {
+    const ctx = IT.layerCtx;
+    const l = ctx ? links.find(x => x.to === ctx.lpId && x.input === ctx.input) : null;
+    if (l) itInserirNoLink(l);
+    else setStatus('Selecione uma camada ocupada na lista de camadas (Layer Position).', true);
   });
   window.__itCommit = () => {
     if (!document.body.classList.contains('it-mode')) return;

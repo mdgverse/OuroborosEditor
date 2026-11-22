@@ -72,3 +72,27 @@ efeito no meio do link e ver o fluxo processar, editar parâmetro e ver o
 resultado mudar, bypass liga/desliga sem tocar nos links, segundo efeito
 encadeado e exclusão reconectando — além das asserções de integração da
 casca (movimentação de elementos reais, pending de inserção, persistência).
+
+## 1.17.0 — camadas automáticas e efeitos contextuais por camada
+
+- **Organização automática**: colar (Ctrl+V) ou importar uma imagem nova
+  chama itAutoLayerPosition: cria o Layer Position se não houver (já
+  ligado ao Output), reaproveita o existente e conecta a imagem na
+  próxima entrada livre a partir da Layer 2 (a Layer 1 é a base), sem
+  sobrescrever ligadas; além das 6 entradas iniciais, addLayer expande.
+  Na HOME, o projeto novo já nasce Image → Layer Position (Layer 2) →
+  Output (flag autoCamadas em ssOpenImageFile; o caminho normal de abrir
+  imagem não mudou). Substituir a imagem de um nó existente não toca nas
+  conexões.
+- **Efeito por camada**: a seção "Camadas (Layer Position)" lista cada
+  entrada com sua fonte (layerRotulo real). Selecionar uma camada foca a
+  cadeia dela; "＋ Efeito na camada selecionada" insere o efeito no link
+  que alimenta só aquela entrada (o mesmo itInserirNoLink genérico —
+  vale para qualquer efeito, sem lógica por tipo). A cadeia da camada
+  (fonte → efeitos → Layer Position) é exibida com bypass individual
+  (nodeSetBypass de sempre). Excluir um efeito usa removeNode e
+  reconecta a camada.
+- Testes: o harness funcional executa itAutoLayerPosition/connect/
+  insertNodeInLink/evalNode/removeNode reais — 4 imagens coladas nos
+  slots 1–4 (Layer 2–5), efeito só na camada da 3ª imagem, edição de
+  parâmetro, bypass, exclusão reconectando e expansão até a Layer 7.
