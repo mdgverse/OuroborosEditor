@@ -91,6 +91,72 @@ const A = new Function(codigo)();
   ok(A.evalNode(2) === 'IMG|brilho80' && A.linksDe().some(l => l.from === 3 && l.to === 2), 'excluir o nó reconecta o fluxo (removeNode do editor)');
 }
 
+/* ---------- 6b. camadas automáticas + efeito contextual (funções reais) ---------- */
+{
+  const nomesB = ['defaultLayer', 'syncClippingHierarchy', 'layerList', 'layerRotulo', 'nodeInputs', 'outputNode', 'linkTo', 'reachable', 'isMultiIn', 'connect', 'removeLink', 'canInsertNode', 'insertNodeInLink', 'evalNode', 'evalSource', 'removeNode', 'itProximoSlotCamada', 'itCadeia', 'itBypassValor', 'bypassResult', 'itAutoLayerPosition'];
+  const codigoB = `
+let links = []; const nodes = new Map(); const selected = new Set(); let previewId = null; let FX_FAST = false; var LAYER_INITIAL_COUNT = 6;
+let __id = 100, __lg = 0;
+function genLayerId() { return 'lg' + (++__lg); }
+const NODE_TYPES = {
+  image: { title: 'Image', inputs: [], params: [] },
+  layers: { title: 'Layers (position)', inputs: [], params: [] },
+  brightness: { title: 'Brightness', inputs: ['Image'], params: [] },
+  output: { title: 'Output', inputs: ['Image'], params: [] },
+};
+const RUN = {
+  image: n => 'img' + n.id,
+  layers: (n, ins) => ins.filter(Boolean).join('+'),
+  brightness: (n, ins) => ins[0] + '|blur' + n.params.amount,
+  output: (n, ins) => ins[0],
+};
+function setStatus() {} function refreshMaskHints() {} function audAposMudarLinks() {}
+function releaseNode() {} function tlNodeRemoved() {} function pruneGroups() {}
+function drawLinks() {} function commit() {} function requestRender() {}
+function markDirty(id) { const st = [id], seen = new Set(); while (st.length) { const c = st.pop(); if (seen.has(c)) continue; seen.add(c); const n = nodes.get(c); if (n) n.dirty = true; for (const l of links) if (l.from === c) st.push(l.to); } }
+function fxPodeSolto() { return false; } function fxFastParams() { return null; } function fxTrackFull() {} function animApply(n, r) { return r; }
+function createNode(type, x, y) { const n = { id: ++__id, type, x: x || 0, y: y || 0, params: {}, dirty: true, cache: undefined, cacheFast: false, runtime: {}, ui: {}, el: { style: {}, remove() {} }, bypass: false }; nodes.set(n.id, n); return n; }
+function addLayer(lp) { const list = layerList(lp); list.push(defaultLayer()); return list.length - 1; }
+${nomesB.map(fnSrc).join('\n')}
+return { nodes, createNode, connect, linkTo, evalNode, removeNode, insertNodeInLink, itAutoLayerPosition, itProximoSlotCamada, layerList, markDirty, linksDe: () => links };
+`;
+  const B = new Function(codigoB)();
+  const out = B.createNode('output', 600, 140);
+  const img1 = B.createNode('image', 60, 140);
+  const r1 = B.itAutoLayerPosition(img1);
+  ok(r1 && r1.idx === 1, 'primeira imagem colada → Layer 2 (índice 1)', r1);
+  const lp = r1.lp;
+  ok(B.linkTo(out.id, 0) && B.linkTo(out.id, 0).from === lp.id, 'Layer Position criado já ligado ao Output');
+  ok(B.evalNode(out.id) === 'img' + img1.id, 'fluxo avalia: imagem → Layer Position → Output');
+
+  const img2 = B.createNode('image'), img3 = B.createNode('image'), img4 = B.createNode('image');
+  ok(B.itAutoLayerPosition(img2).idx === 2, 'segunda imagem → Layer 3');
+  ok(B.itAutoLayerPosition(img3).idx === 3, 'terceira imagem → Layer 4');
+  ok(B.itAutoLayerPosition(img4).idx === 4, 'quarta imagem → Layer 5');
+  ok([...B.nodes.values()].filter(n => n.type === 'layers').length === 1, 'Layer Position é reaproveitado (um só)');
+  ok(B.evalNode(out.id) === ['img' + img1.id, 'img' + img2.id, 'img' + img3.id, 'img' + img4.id].join('+'), 'ordem de inserção preservada na composição');
+
+  /* efeito contextual: só na camada da img3 (Layer 4, input 3) */
+  const fx = B.createNode('brightness'); fx.params.amount = 40;
+  B.insertNodeInLink(fx.id, B.linkTo(lp.id, 3));
+  ok(B.evalNode(out.id) === ['img' + img1.id, 'img' + img2.id, 'img' + img3.id + '|blur40', 'img' + img4.id].join('+'), 'efeito entra só na camada escolhida; as outras intactas');
+  fx.params.amount = 90; B.markDirty(fx.id);
+  ok(B.evalNode(out.id).includes('img' + img3.id + '|blur90'), 'parâmetro do efeito da camada é editável e reflete');
+  fx.bypass = true; B.markDirty(fx.id);
+  ok(B.evalNode(out.id) === ['img' + img1.id, 'img' + img2.id, 'img' + img3.id, 'img' + img4.id].join('+'), 'bypass desativa só o efeito daquela camada');
+  fx.bypass = false; B.markDirty(fx.id);
+  B.removeNode(fx.id);
+  ok(B.linkTo(lp.id, 3) && B.linkTo(lp.id, 3).from === img3.id, 'excluir o efeito reconecta a camada original');
+  ok(B.evalNode(out.id) === ['img' + img1.id, 'img' + img2.id, 'img' + img3.id, 'img' + img4.id].join('+'), 'fluxo íntegro depois de excluir o efeito');
+
+  /* expansão além das 6 entradas iniciais */
+  const img5 = B.createNode('image'), img6 = B.createNode('image');
+  ok(B.itAutoLayerPosition(img5).idx === 5, 'quinta imagem → Layer 6');
+  ok(B.itAutoLayerPosition(img6).idx === 6 && B.layerList(lp).length === 7, 'sétima entrada criada sob demanda (sem sobrescrever)');
+  ok(B.itProximoSlotCamada([1, 2, 4], 6) === 3, 'slot livre do meio é usado antes de expandir');
+  ok(B.linksDe().filter(l => l.to === lp.id).length === 6, 'nenhuma camada foi sobrescrita');
+}
+
 /* ---------- 7. integração da casca no HTML ---------- */
 {
   ok(html.includes('id="itView"') && html.includes('id="itFlow"') && html.includes('id="itPropsHost"') && html.includes('id="itStageHost"'), 'layout da casca: fluxo, palco e propriedades');
@@ -108,6 +174,13 @@ const A = new Function(codigo)();
   ok(html.includes('window.__itCommit'), 'a casca acompanha commits do grafo');
   ok(html.includes("document.body.classList.contains('it-mode')") && html.includes("itStageWrap') || viewEl"), 'menu Add se posiciona sobre o palco no modo Interactive');
   ok(html.includes("localStorage.setItem('ouroboros:ui-mode'"), 'preferência de modo continua fora dos dados do projeto');
+  /* 1.17.0: camadas automáticas + contexto */
+  ok(html.includes('function itAutoLayerPosition(imgNode)'), 'organizador automático de camadas existe');
+  ok(html.includes("connect(a.id, lp.id, 1)") && html.includes('autoCamadas: true'), 'projeto novo ao colar: Image → Layer 2 → Output');
+  ok(html.includes('if (criado && typeof itAutoLayerPosition') && html.includes('if (criadoImp && typeof itAutoLayerPosition'), 'colar/importar com projeto aberto organizam (sem tocar em substituição de imagem)');
+  ok(html.includes('id="itLayersCtx"') && html.includes('id="itFxLayer"'), 'seção de camadas contextuais na interface');
+  ok(html.includes('function itLayersRender()') && html.includes('layerRotulo(lp, i)'), 'lista usa os rótulos reais do Layer Position');
+  ok(html.includes('cadeia desta camada'), 'a cadeia de efeitos da camada selecionada é exibida com bypass');
   const setMode = html.slice(html.indexOf('function itSetMode('), html.indexOf('function itAjuda()'));
   ok(!/location\.reload/.test(setMode), 'trocar de modo não recarrega a página');
   ok(setMode.includes("nv.style.display = 'none'") && setMode.includes("nv.style.display = ''"), 'trocar de modo só esconde/mostra e move elementos reais');
