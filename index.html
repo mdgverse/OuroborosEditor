@@ -630,7 +630,7 @@ body.it-mode #tlPanel{display:none}
 
 /* Versão do editor — o arquivo VERSION na raiz é a fonte da verdade
    (o build do APK usa o mesmo número no versionName e falha se divergir). */
-const APP_VERSION = '1.15.0';
+const APP_VERSION = '1.16.0';
 /* tooltip do botão da marca: só o nome do produto (a versão é metadado, não entra na marca) */
 {
   const marca = document.getElementById('brandBtn');
@@ -2560,16 +2560,14 @@ const NODE_TYPES = {
   },
   paletteRemap: {
     title: 'Palette Remap', cat: 'color', inputs: ['Image', 'Palette', 'Mask'],
-    kw: 'palette remap recolore variante hue cor fonte arcbrush',
+    kw: 'palette remap recolore paleta referencia substituicao cromatica arcbrush',
     params: [
-      COL('fonte', 'Source color', '#c83232'),
-      NUM('slot', 'Variant slot (0 = first palette color)', 0, 63, 0),
-      NUM('tol', 'Hue tolerance (°)', 1, 90, 30),
-      NUM('minSat', 'Min saturation (%)', 0, 50, 20),
-      NUM('feather', 'Feather (%)', 0, 100, 20),
-      ENUM('preserva', 'Preserve luminance', [['sim', 'Yes'], ['nao', 'No']], 'sim'),
+      ENUM('modo', 'Remap method', [['tons', 'Palette tones · preserve light & detail'], ['exatas', 'Exact palette colors · shaded by light']], 'tons'),
+      NUM('preserva', 'Preserve original light (%)', 0, 100, 100),
+      NUM('neutros', 'Keep neutrals neutral (%)', 0, 100, 35),
+      NUM('mix', 'Mix (%)', 0, 100, 100),
       ENUM('maskFrom', 'Mask from', [['lum', 'Luminance'], ['alpha', 'Alpha'], ['r', 'Red'], ['g', 'Green'], ['b', 'Blue']], 'lum'),
-      { type: 'info', key: 'info', label: 'Variant' },
+      { type: 'info', key: 'info', label: 'Remap' },
     ],
   },
   applyLut: {
@@ -25691,21 +25689,52 @@ function palGradiente(paradas, qtd, interp, hueLongo) {
   }
   return out;
 }
-/* Recolore um pixel: matiz da fonte → cor alvo, com tolerância/feather e
-   luminância preservada (o coração do Palette Remap do ArcBrush). */
-function palRemapPixel(r, g, b, fonte, alvo, op) {
+/* 1.16.0 — Palette Remap reconfigurado: substituição cromática pela paleta
+   inteira (não mais "uma cor-fonte → um slot"). Cada pixel procura a cor da
+   paleta mais próxima no plano cromático OKLab (com peso pequeno da luz, para
+   respeitar a relação tonal) e recebe a identidade cromática dela, mantendo
+   a luz do pixel original — é isso que preserva formas, sombras e texturas. */
+function palOklab(r, g, b) {
+  const lin = v => { v /= 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+  const lr = lin(r), lg = lin(g), lb = lin(b);
+  const l = Math.cbrt(0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb), m = Math.cbrt(0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb), s = Math.cbrt(0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb);
+  return [0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s, 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s, 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s];
+}
+/* Enriquece as cores da paleta com os espaços usados no mapeamento. */
+function palPreparaPaleta(cores) {
+  return (cores || []).map(c => {
+    const r = Math.round(c.r != null ? c.r : c[0]), g = Math.round(c.g != null ? c.g : c[1]), b = Math.round(c.b != null ? c.b : c[2]);
+    const [h, s, l] = palHsl(r, g, b);
+    const [L, a, bb] = palOklab(r, g, b);
+    return { r, g, b, h, s, l, L, a, bb, lum: (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 };
+  });
+}
+/* Mapeia UM pixel para a paleta preparada.
+   op: { modo:'tons'|'exatas', preserva:0..1 (luz original), neutros:0..1 }
+   - tons: matiz+saturação da cor da paleta, luz do pixel (detalhe intacto);
+   - exatas: a cor exata da paleta, re-sombreada pela razão de luz do pixel. */
+function palMapeiaPixel(r, g, b, paleta, op) {
+  if (!paleta || !paleta.length) return [r, g, b];
   const [h, s, l] = palHsl(r, g, b);
-  if (s * 100 < (op.minSat || 0)) return [r, g, b];
-  const [hf, ,] = palHsl(fonte[0], fonte[1], fonte[2]);
-  const [ha, sa, la] = palHsl(alvo[0], alvo[1], alvo[2]);
-  let dh = Math.abs(h - hf);
-  if (dh > 180) dh = 360 - dh;
-  const tol = Math.max(1, op.tol || 30), pena = (op.feather || 0) * tol;
-  let f = dh <= tol - pena ? 1 : dh >= tol + pena ? 0 : 1 - (dh - (tol - pena)) / Math.max(0.0001, 2 * pena);
-  if (f <= 0) return [r, g, b];
-  const novoL = op.preservaLum ? l : l + (la - l) * 0.5 * f;
-  const mist = palRgbDeHsl(ha, s + (sa - s) * f, novoL);
-  return [Math.round(r + (mist[0] - r) * f), Math.round(g + (mist[1] - g) * f), Math.round(b + (mist[2] - b) * f)];
+  const [L, a, bb] = palOklab(r, g, b);
+  let alvo = paleta[0], menor = Infinity;
+  for (const c of paleta) {
+    const da = a - c.a, db = bb - c.bb, dl = (L - c.L) * 0.35;
+    const d = da * da + db * db + dl * dl;
+    if (d < menor) { menor = d; alvo = c; }
+  }
+  const preserva = Math.max(0, Math.min(1, op && op.preserva != null ? op.preserva : 1));
+  const neutros = Math.max(0, Math.min(1, op && op.neutros != null ? op.neutros : 0.35));
+  /* pixel quase cinza não ganha cor forte: a saturação resultante acompanha
+     a saturação original (sombras neutras continuam neutras). */
+  const fN = 1 - neutros * Math.max(0, 1 - s * 4);
+  if (op && op.modo === 'exatas') {
+    const razao = alvo.lum > 0.004 ? Math.max(0, Math.min(3, ((0.2126 * r + 0.7152 * g + 0.0722 * b) / 255) / alvo.lum)) : 1;
+    const f = 1 - preserva + preserva * razao;
+    return [Math.round(Math.min(255, alvo.r * f)), Math.round(Math.min(255, alvo.g * f)), Math.round(Math.min(255, alvo.b * f))];
+  }
+  const luzSaida = l + (alvo.l - l) * (1 - preserva);
+  return palRgbDeHsl(alvo.h, Math.max(0, Math.min(1, alvo.s * fN)), luzSaida);
 }
 /* Lê as cores de uma imagem-tira de paleta (linha central, cores distintas em ordem). */
 function palCoresDaTira(dados, w, h) {
@@ -25738,17 +25767,23 @@ function cpuRes(c) {
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
   return mkRes(e);
 }
-function palTiraCanvas(cores) {
+/* Tira visual da paleta. mostrarCodigos=false → só as amostras, sem nenhum
+   texto (pedido para o Palette From Image); os dados viajam iguais, porque
+   quem lê a tira (palCoresDaTira) só olha a linha central das amostras. */
+function palTiraCanvas(cores, mostrarCodigos = true) {
   const c = document.createElement('canvas');
-  c.width = Math.max(256, cores.length * 40); c.height = 110;
+  c.width = Math.max(256, cores.length * 40); c.height = mostrarCodigos ? 110 : 72;
   const g = c.getContext('2d');
   g.fillStyle = '#101114'; g.fillRect(0, 0, c.width, c.height);
   const wSlot = c.width / Math.max(1, cores.length);
+  const altAmostra = mostrarCodigos ? 78 : c.height;
   cores.forEach((cor, i) => {
     g.fillStyle = palHexDeRgb(cor.r, cor.g, cor.b);
-    g.fillRect(Math.floor(i * wSlot), 0, Math.ceil(wSlot), 78);
-    g.fillStyle = '#cfd4dc'; g.font = '11px system-ui, sans-serif'; g.textAlign = 'center';
-    g.fillText(palHexDeRgb(cor.r, cor.g, cor.b), i * wSlot + wSlot / 2, 96);
+    g.fillRect(Math.floor(i * wSlot), 0, Math.ceil(wSlot), altAmostra);
+    if (mostrarCodigos) {
+      g.fillStyle = '#cfd4dc'; g.font = '11px system-ui, sans-serif'; g.textAlign = 'center';
+      g.fillText(palHexDeRgb(cor.r, cor.g, cor.b), i * wSlot + wSlot / 2, 96);
+    }
   });
   return c;
 }
@@ -25784,22 +25819,36 @@ function runPaletteImgNode(n, [a]) {
     n.runtime.palChave = chave;
   }
   palInfo(n, 'Palette: ' + n.runtime.palCores.length + ' cores extraídas (' + (p.modo === 'exact' ? 'exatas' : 'cluster') + ').');
-  return cpuRes(palTiraCanvas(n.runtime.palCores));
+  /* 1.16.0: apresentação só visual — amostras sem códigos abaixo delas.
+     A paleta continua saindo completa (runtime.palCores + tira) para o Remap. */
+  return cpuRes(palTiraCanvas(n.runtime.palCores, false));
 }
-const PAL_FALLBACK = ['#c83232', '#e07b28', '#e3c832', '#3f9e4d', '#2b6fd4', '#7a3fd4'].map(palRgbDeHex);
+/* 1.16.0 — a paleta do Remap vem, nesta ordem: (1) das cores que o nó ligado
+   no socket Palette extraiu de verdade (runtime.palCores do nó-fonte — o
+   caminho normal vindo do Palette From Image); (2) das amostras da tira
+   ligada, lidas da linha central. Sem paleta, o nó NÃO inventa cores:
+   atravessa a imagem e avisa. */
+function palCoresParaRemap(n, tiraRes) {
+  const l = links.find(x => x.to === n.id && x.input === 1);
+  const fonte = l ? nodes.get(l.from) : null;
+  if (fonte && fonte.runtime && Array.isArray(fonte.runtime.palCores) && fonte.runtime.palCores.length)
+    return fonte.runtime.palCores.map(c => ({ r: c.r, g: c.g, b: c.b }));
+  if (tiraRes) {
+    const c = readResult(tiraRes);
+    return palCoresDaTira(c.getContext('2d').getImageData(0, 0, c.width, c.height).data, c.width, c.height)
+      .map(cor => ({ r: cor.r, g: cor.g, b: cor.b }));
+  }
+  return [];
+}
 function runPaletteRemapNode(n, [img, tira, mascara]) {
   if (!img) return null;
   const p = n.params;
-  let cores = null;
-  if (tira) {
-    const c = readResult(tira);
-    cores = palCoresDaTira(c.getContext('2d').getImageData(0, 0, c.width, c.height).data, c.width, c.height)
-      .map(cor => [cor.r, cor.g, cor.b]);
+  const cores = palCoresParaRemap(n, tira);
+  if (!cores.length) {
+    palInfo(n, 'Palette Remap: conecte uma paleta no 2º socket (ex.: Palette From Image). Sem paleta, a imagem passa intacta.');
+    return ptRes(img);
   }
-  if (!cores || !cores.length) cores = PAL_FALLBACK;
-  const slot = Math.max(0, Math.min(cores.length - 1, Math.round(p.slot) || 0));
-  const alvo = cores[slot];
-  const fonte = palRgbDeHex(p.fonte);
+  const paleta = palPreparaPaleta(cores);
   const base = readResult(img);
   const g = base.getContext('2d');
   const imgData = g.getImageData(0, 0, base.width, base.height);
@@ -25813,9 +25862,19 @@ function runPaletteRemapNode(n, [img, tira, mascara]) {
     dadosMasc = ajustada.getContext('2d').getImageData(0, 0, base.width, base.height).data;
   }
   const canal = { lum: -1, alpha: 3, r: 0, g: 1, b: 2 }[p.maskFrom] ?? -1;
-  const op = { tol: p.tol, minSat: p.minSat, feather: (p.feather || 0) / 100, preservaLum: p.preserva === 'sim' };
+  const op = { modo: p.modo === 'exatas' ? 'exatas' : 'tons', preserva: Math.max(0, Math.min(100, Number(p.preserva == null ? 100 : p.preserva))) / 100, neutros: Math.max(0, Math.min(100, Number(p.neutros == null ? 35 : p.neutros))) / 100 };
+  const mix = Math.max(0, Math.min(100, Number(p.mix == null ? 100 : p.mix))) / 100;
+  /* cache por cor quantizada (5 bits/canal): imagens grandes não recalculam
+     o mapeamento para cada pixel repetido. */
+  const cache = new Map();
   for (let i = 0; i + 3 < d.length; i += 4) {
-    let [r, gg, b] = palRemapPixel(d[i], d[i + 1], d[i + 2], fonte, alvo, op);
+    const chave = ((d[i] >> 3) << 10) | ((d[i + 1] >> 3) << 5) | (d[i + 2] >> 3);
+    let map = cache.get(chave);
+    if (!map) {
+      map = palMapeiaPixel(d[i], d[i + 1], d[i + 2], paleta, op);
+      cache.set(chave, map);
+    }
+    let r = Math.round(d[i] + (map[0] - d[i]) * mix), gg = Math.round(d[i + 1] + (map[1] - d[i + 1]) * mix), b = Math.round(d[i + 2] + (map[2] - d[i + 2]) * mix);
     if (dadosMasc) {
       const m = (canal === -1 ? (0.2126 * dadosMasc[i] + 0.7152 * dadosMasc[i + 1] + 0.0722 * dadosMasc[i + 2]) : dadosMasc[i + canal]) / 255;
       r = Math.round(d[i] + (r - d[i]) * m); gg = Math.round(d[i + 1] + (gg - d[i + 1]) * m); b = Math.round(d[i + 2] + (b - d[i + 2]) * m);
@@ -25823,7 +25882,7 @@ function runPaletteRemapNode(n, [img, tira, mascara]) {
     d[i] = r; d[i + 1] = gg; d[i + 2] = b;
   }
   g.putImageData(imgData, 0, 0);
-  palInfo(n, 'Variante ' + (slot + 1) + ' de ' + cores.length + ' (' + palHexDeRgb(alvo[0], alvo[1], alvo[2]) + '). Mude "Variant slot" para outra cor da paleta.');
+  palInfo(n, 'Remapeada para a paleta de ' + paleta.length + ' cores (' + (op.modo === 'exatas' ? 'cores exatas' : 'tons da paleta') + ', luz preservada ' + Math.round(op.preserva * 100) + '%). Trocar a paleta atualiza este resultado.');
   return cpuRes(base);
 }
 function runApplyLutNode(n, [a]) {
