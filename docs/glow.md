@@ -87,3 +87,28 @@ de cada passo do pipeline e a fiação do runner. GLSL validado com
 `@shaderfrog/glsl-parser` (115 shaders, 0 erros). Sem GPU neste
 ambiente, o render em si não é executado aqui — a prova é estrutural +
 matemática, e a validação visual fica para o uso no app publicado.
+
+## 1.19.0 — parâmetro Radial no Motion
+
+- Novo parâmetro **Radial** (`motionMode`), logo após **Direction** e
+  visível só no Style **Motion**: `Direction` (padrão) mantém o cálculo
+  histórico; `Radial` calcula a direção por pixel a partir do centro do
+  efeito (0.5, 0.5 do buffer de glow), em espaço de pixel corrigido pelo
+  texel (sem distorção de aspecto) — centro exato não tem direção e o
+  rastro não anda. Os dois passes do Motion e os controles de movimento
+  (Spread/Glow/Range/Warmth/Saturation) são os mesmos nos dois modos.
+- Implementação: `uRadial`/`uCenter` no shader `glowTrail` +
+  `glowTrailPass(..., radial)` + `glowEhRadial(p)` no `runGlowV2`
+  (prévia e exportação usam o mesmo runner). Regras puras testadas em
+  `tests/glow.test.mjs` (`glowEhRadial` + fórmula radial no shader).
+- Compatibilidade: projetos antigos não têm a chave — o default da
+  definição (`direction`) é aplicado na criação/carga do nó, sem
+  mudança visual. Streak e os demais estilos não foram tocados.
+
+## 1.19.0 — remoção da assistente conversacional
+
+A assistente conversacional que havia sido adicionada ao editor foi
+removida por completo nesta versão: interface, estilos próprios,
+lógica, arte, documentação, teste dedicado e o passo de CI.
+Nenhuma referência restou no repositório; nenhum outro nó, atalho ou
+ferramenta foi afetado.

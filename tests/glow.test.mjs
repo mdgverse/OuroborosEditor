@@ -33,8 +33,8 @@ console.log('Glow · painel (Lightroom > Effects > Glow)');
 
 ok(noDef.title === 'Glow' && noDef.cat === 'lens' && JSON.stringify(noDef.inputs) === JSON.stringify(['Image']),
   'nó Glow na categoria lens, socket Image');
-ok(JSON.stringify(noDef.params.map(d => d.key)) === JSON.stringify(['glow', 'style', 'range', 'spread', 'warmth', 'direction', 'saturation']),
-  'ordem do painel: Glow, Style, Range, Spread, Warmth, Direction, Saturation');
+ok(JSON.stringify(noDef.params.map(d => d.key)) === JSON.stringify(['glow', 'style', 'range', 'spread', 'warmth', 'direction', 'motionMode', 'saturation']),
+  'ordem do painel: Glow, Style, Range, Spread, Warmth, Direction, Radial, Saturation');
 ok(por.glow.min === 0 && por.glow.max === 100 && por.glow.def === 0, 'Glow 0–100, default 0 (original intocado)');
 ok(JSON.stringify(por.style.options.map(o => o[0])) === JSON.stringify(['bloom', 'diffusion', 'halation', 'motion', 'streak'])
   && por.style.def === 'bloom', 'Style com os 5 estilos: Bloom, Diffusion, Halation, Motion, Streak');
@@ -43,6 +43,9 @@ ok(por.range.min === 0 && por.range.max === 100 && por.spread.min === 0 && por.s
 ok(por.warmth.min === -100 && por.warmth.max === 100 && por.warmth.def === 0, 'Warmth −100…+100, default 0');
 ok(por.direction.min === -180 && por.direction.max === 180 && por.direction.def === -90,
   'Direction −180…+180, default −90 (vertical, como no vídeo)');
+ok(por.motionMode.label === 'Radial' && JSON.stringify(por.motionMode.options) === JSON.stringify([['direction', 'Direction'], ['radial', 'Radial']])
+  && por.motionMode.def === 'direction',
+  'Radial (logo após Direction): Direction × Radial, padrão Direction — projetos antigos sem a chave seguem no comportamento de sempre');
 ok(por.saturation.min === 0 && por.saturation.max === 100 && por.saturation.def === 100,
   'Saturation 0–100 do glow, default 100 (cor natural)');
 ok(!('threshold' in por) && !('radius' in por) && !('intensity' in por), 'parâmetros antigos (threshold/radius/intensity) removidos');
@@ -50,12 +53,17 @@ ok(!('threshold' in por) && !('radius' in por) && !('intensity' in por), 'parâm
 console.log('Glow · regras puras');
 
 const puro = extrai('/* GLOW_PURO_INI */', '/* GLOW_PURO_FIM */');
-const P = new Function(puro + '\nreturn { GLOW_VIS, GLOW_HAL_TINT, glowKeysVisiveis, glowLimiar, glowNiveis, glowTrailLen, glowWarmTint };')();
+const P = new Function(puro + '\nreturn { GLOW_VIS, GLOW_HAL_TINT, glowKeysVisiveis, glowLimiar, glowNiveis, glowTrailLen, glowWarmTint, glowEhRadial };')();
 
 ok(!P.glowKeysVisiveis({ style: 'bloom' }).has('direction') && !P.glowKeysVisiveis({ style: 'diffusion' }).has('direction')
   && !P.glowKeysVisiveis({ style: 'halation' }).has('direction'), 'Direction escondido em Bloom/Diffusion/Halation');
 ok(P.glowKeysVisiveis({ style: 'motion' }).has('direction') && P.glowKeysVisiveis({ style: 'streak' }).has('direction'),
   'Direction visível só em Motion e Streak');
+ok(P.glowKeysVisiveis({ style: 'motion' }).has('motionMode'), 'Radial visível no Motion');
+ok(!P.glowKeysVisiveis({ style: 'streak' }).has('motionMode') && !P.glowKeysVisiveis({ style: 'bloom' }).has('motionMode'),
+  'Radial não aparece nos outros estilos');
+ok(P.glowEhRadial({}) === false && P.glowEhRadial({ motionMode: 'direction' }) === false && P.glowEhRadial({ motionMode: 'radial' }) === true,
+  'sem a chave (projeto antigo) ou em Direction = comportamento atual; Radial só com a escolha explícita');
 ok(['bloom', 'diffusion', 'halation', 'motion', 'streak'].every(st =>
   ['glow', 'style', 'range', 'spread', 'warmth', 'saturation'].every(k => P.glowKeysVisiveis({ style: st }).has(k))),
   'Glow/Style/Range/Spread/Warmth/Saturation visíveis em todos os estilos');
@@ -81,7 +89,10 @@ ok(/pow\(m, uPower\)/.test(ext) && /uHal > 0\.5/.test(ext), 'power curve (Streak
 const trail = shader('glowTrail');
 ok(/for \(int i = 1; i <= 48; i\+\+\)/.test(trail), 'Motion/Streak: 48 amostras de cada lado (97 taps ≥ 32 exigidos)');
 ok(/exp\(-3\.0 \* t\)/.test(trail), 'falloff exponencial ao longo do rastro (contínuo, sem fantasmas)');
-ok(/uDir \* \(t \* uLen\)/.test(trail), 'rastro anisotrópico ao longo de Direction (não radial)');
+ok(/dir \* \(t \* uLen\)/.test(trail), 'rastro anisotrópico ao longo da direção calculada');
+ok(/uniform float uRadial/.test(trail) && /uCenter/.test(trail) && /\(vUv - uCenter\)/.test(trail),
+  'modo Radial: direção por pixel a partir do centro do efeito');
+ok(/l > 1e-4 \? d \/ l : vec2\(0\.0\)/.test(trail), 'centro exato sem direção (sem NaN no shader)');
 
 const grade = shader('glowGrade');
 ok(/mix\(vec3\(lum\), g\.rgb, uSat\)/.test(grade), 'passo 4: Saturation só na camada de glow');
@@ -99,6 +110,9 @@ const run = funcao('runGlowV2');
 ok(/if \(!\(glow > 0\)\) return ptRes\(a\)/.test(run), 'Glow = 0 devolve o original sem custo (passthrough)');
 ok(/estilo|style === 'motion'/.test(run) && /style === 'streak'/.test(run) && /dir \+ Math\.PI \/ 2/.test(run),
   'Streak: eixo principal + eixo perpendicular curto (anamórfico em 2 eixos)');
+ok(/const radial = style === 'motion' && glowEhRadial\(p\)/.test(run) && /boosts\[i\], radial\)/.test(run),
+  'runner: Radial só no Motion e repassado aos passes do rastro (prévia e export usam o mesmo runGlowV2)');
+ok(/uRadial: radial \? 1 : 0, uCenter: \[0\.5, 0\.5\]/.test(html), 'o passe do rastro recebe o modo e o centro do efeito');
 ok(/style === 'diffusion'/.test(run) && /o\.levels \+ 1/.test(run), 'Diffusion usa um nível a mais de pirâmide (mais leitoso)');
 ok(/glowWarmTint\(p\.warmth/.test(run) && /GLOW_HAL_TINT/.test(run), 'Warmth aplicado no runner; Halation soma o tint quente');
 ok(/glowEffect: \(n, \[a\]\) => runGlowV2\(n, a\)/.test(html), 'RUN.glowEffect usa o pipeline novo');
