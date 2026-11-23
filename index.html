@@ -605,7 +605,7 @@ body.it-mode #tlPanel{display:none}
 
 /* Versão do editor — o arquivo VERSION na raiz é a fonte da verdade
    (o build do APK usa o mesmo número no versionName e falha se divergir). */
-const APP_VERSION = '1.19.0';
+const APP_VERSION = '1.20.0';
 /* tooltip do botão da marca: só o nome do produto (a versão é metadado, não entra na marca) */
 {
   const marca = document.getElementById('brandBtn');
@@ -2983,6 +2983,61 @@ const NODE_TYPES = {
       NUM('smooth', 'Smoothness (segments)', 8, 800, 160),
       COL('cor', 'Color', '#000000'),
       NUM('opacity', 'Opacity (%)', 0, 100, 100),
+    ],
+  },
+  /* PCB (1.20.0): transforma a imagem ligada numa composição de placa de
+     circuito impresso gerada a partir dela — traces angulares, terminais,
+     junções e chips acompanhando silhueta, bordas e brilho da fonte.
+     Nada de textura fixa sobreposta: a geometria nasce da análise da
+     imagem (pcbCamposDe/pcbGeraGeo) com seed determinística. */
+  pcbEffect: {
+    title: 'PCB', cat: 'style', inputs: ['Image', 'Mask'],
+    kw: 'pcb circuit board traces placa circuito chip vias pads electronic tech butterfly',
+    params: [
+      SEC('secSrc', 'Source', 'How the source image guides the circuit layout.'),
+      ENUM('sourceMode', 'Source Mode', [['combined', 'Combined'], ['silhouette', 'Silhouette'], ['edges', 'Edges'], ['brightness', 'Brightness']], 'combined'),
+      NUM('threshold', 'Threshold', 0, 100, 50),
+      NUM('edgeDetail', 'Edge Detail', 0, 100, 55),
+      NUM('smoothing', 'Detail Smoothing', 0, 100, 35),
+      NUM('fidelity', 'Shape Fidelity', 0, 100, 65),
+      ENUM('invert', 'Invert Detection', [['no', 'No'], ['yes', 'Yes']], 'no'),
+      NUM('maskInfluence', 'Mask Influence', 0, 100, 100),
+      NUM('seed', 'Seed', 0, 9999, 7),
+      BTN('seedRandom', 'Seed', 'psSeed', 'Randomize seed'),
+      SEC('secTraces', 'Traces', 'Circuit paths generated from the source structure.'),
+      NUM('density', 'Trace Density', 0, 100, 55),
+      NUM('traceWidth', 'Trace Width', 0.5, 8, 2, 0.5),
+      NUM('spacing', 'Trace Spacing', 1, 10, 3),
+      NUM('pathLength', 'Path Length', 0, 100, 55),
+      NUM('branching', 'Branching', 0, 100, 35),
+      ENUM('angleStyle', 'Angle Style', [['mixed', 'Mixed'], ['orthogonal', 'Orthogonal'], ['deg45', '45-Degree']], 'mixed'),
+      ENUM('direction', 'Direction', [['any', 'Any'], ['horizontal', 'Horizontal'], ['vertical', 'Vertical'], ['diagonal', 'Diagonal']], 'any'),
+      ENUM('corner', 'Corner Style', [['sharp', 'Sharp'], ['rounded', 'Rounded']], 'sharp'),
+      NUM('terminalDensity', 'Terminal Density', 0, 100, 70),
+      NUM('terminalSize', 'Terminal Size', 1, 12, 4),
+      NUM('junctionDensity', 'Junction Density', 0, 100, 60),
+      NUM('junctionSize', 'Junction Size', 1, 12, 3),
+      SEC('secComp', 'Components', 'Chip-like details and subject clipping.'),
+      NUM('componentDensity', 'Component Density', 0, 100, 25),
+      ENUM('centerChip', 'Center Component', [['yes', 'Yes'], ['no', 'No']], 'yes'),
+      NUM('centerX', 'Center X (%)', 0, 100, 50),
+      NUM('centerY', 'Center Y (%)', 0, 100, 50),
+      NUM('centerSize', 'Center Size (%)', 4, 40, 16),
+      ENUM('symmetry', 'Symmetry', [['off', 'Off'], ['horizontal', 'Horizontal mirror']], 'off'),
+      ENUM('clip', 'Clip to Subject', [['yes', 'Yes'], ['no', 'No']], 'yes'),
+      NUM('extension', 'Extension Length', 0, 100, 30),
+      SEC('secColor', 'Color', 'Palette (2–8 colors), background and presets. Presets stay editable.'),
+      { type: 'pcbpal', key: 'palette', label: 'Palette', def: ['#2fd8e8', '#9ff3ff', '#ffd166'] },
+      ENUM('colorMode', 'Color Assignment', [['cycle', 'Palette cycle'], ['seeded', 'Seeded distribution'], ['source', 'From source image']], 'cycle'),
+      COL('bgColor', 'Background Color', '#0a1e24'),
+      ENUM('transparentBg', 'Transparent Background', [['no', 'No'], ['yes', 'Yes']], 'no'),
+      BTN('presetCyan', 'Presets', 'pcbPresetCyan', 'Cyan Circuit'),
+      BTN('presetWhite', 'Presets', 'pcbPresetWhite', 'White / Red Chip'),
+      BTN('presetGreen', 'Presets', 'pcbPresetGreen', 'Classic Green Board'),
+      SEC('secOut', 'Output', 'Compositing over the source, following the editor conventions.'),
+      ENUM('blend', 'Blend Mode', BLEND, 'normal'),
+      NUM('opacity', 'Opacity', 0, 100, 100),
+      NUM('mix', 'Mix With Source', 0, 100, 100),
     ],
   },
   magicGen: {
@@ -11528,7 +11583,421 @@ function fx7FastRes(a) {
   return mkRes(e);
 }
 // input canvas (screen order)
-// ===== LINEweight: image -> variable-weight line pattern (Ruri Lines-style) =====
+/* PCB_PURO_INI */
+/* PCB: análise da imagem e geração da geometria do circuito. Sem DOM/WebGL:
+   recebe os pixels (RGBA) e devolve campos + geometria em coordenadas da
+   grade de análise. Determinístico: mesma imagem + parâmetros + seed =
+   mesmo layout (testado em tests/pcb.test.mjs). */
+const PCB_PALETA_PADRAO = ['#2fd8e8', '#9ff3ff', '#ffd166'];
+function pcbRand(seed) {
+  let t = (Number(seed) || 0) >>> 0;
+  return () => {
+    t += 0x6D2B79F5;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r = (r + Math.imul(r ^ (r >>> 7), 61 | r)) ^ r;
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function pcbClamp(v, a, b) { return Math.min(b, Math.max(a, v)); }
+function pcbOpcoes(p) {
+  p = p || {};
+  const num = (k, d) => { const v = Number(p[k]); return isFinite(v) ? v : d; };
+  let pal = Array.isArray(p.palette) ? p.palette.filter(c => typeof c === 'string' && c) : [];
+  if (pal.length < 2) pal = [...PCB_PALETA_PADRAO];
+  return {
+    sourceMode: ['combined', 'silhouette', 'edges', 'brightness'].includes(p.sourceMode) ? p.sourceMode : 'combined',
+    threshold: pcbClamp(num('threshold', 50), 0, 100) / 100,
+    edgeDetail: pcbClamp(num('edgeDetail', 55), 0, 100) / 100,
+    smoothing: Math.round(pcbClamp(num('smoothing', 35), 0, 100) / 100 * 3),
+    fidelity: pcbClamp(num('fidelity', 65), 0, 100) / 100,
+    invert: p.invert === 'yes',
+    seed: Math.round(num('seed', 7)),
+    density: pcbClamp(num('density', 55), 0, 100) / 100,
+    spacing: pcbClamp(num('spacing', 3), 1, 10),
+    pathLength: pcbClamp(num('pathLength', 55), 0, 100) / 100,
+    branching: pcbClamp(num('branching', 35), 0, 100) / 100,
+    angleStyle: ['mixed', 'orthogonal', 'deg45'].includes(p.angleStyle) ? p.angleStyle : 'mixed',
+    direction: ['any', 'horizontal', 'vertical', 'diagonal'].includes(p.direction) ? p.direction : 'any',
+    terminalDensity: pcbClamp(num('terminalDensity', 70), 0, 100) / 100,
+    junctionDensity: pcbClamp(num('junctionDensity', 60), 0, 100) / 100,
+    componentDensity: pcbClamp(num('componentDensity', 25), 0, 100) / 100,
+    centerChip: p.centerChip !== 'no',
+    centerX: pcbClamp(num('centerX', 50), 0, 100) / 100,
+    centerY: pcbClamp(num('centerY', 50), 0, 100) / 100,
+    centerSize: pcbClamp(num('centerSize', 16), 4, 40) / 100,
+    symmetry: p.symmetry === 'horizontal',
+    clip: p.clip !== 'no',
+    extension: pcbClamp(num('extension', 30), 0, 100) / 100,
+    palette: pal.slice(0, 8),
+  };
+}
+/* Campos da imagem: luminância (suavizada), máscara do sujeito (limiar +
+   alfa) e magnitude de borda (Sobel normalizada). */
+function pcbCamposDe(dados, W, H, op) {
+  const lum = new Float32Array(W * H), alp = new Float32Array(W * H);
+  for (let i = 0, j = 0; i < dados.length; i += 4, j++) {
+    lum[j] = (0.2126 * dados[i] + 0.7152 * dados[i + 1] + 0.0722 * dados[i + 2]) / 255;
+    alp[j] = dados[i + 3] / 255;
+  }
+  const blur = (src, passes) => {
+    let a = src, b = new Float32Array(src.length);
+    for (let p = 0; p < passes; p++) {
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        let s = 0, c = 0;
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+          const xx = x + dx, yy = y + dy;
+          if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue;
+          s += a[yy * W + xx]; c++;
+        }
+        b[y * W + x] = s / c;
+      }
+      [a, b] = [b, a];
+    }
+    return a;
+  };
+  const lumS = blur(lum, op.smoothing);
+  const t = op.threshold;
+  const mask = new Float32Array(W * H);
+  for (let j = 0; j < W * H; j++) {
+    const v = op.invert ? (t - lumS[j]) : (lumS[j] - t);
+    mask[j] = pcbClamp(v * 6 + 0.5, 0, 1) * alp[j];
+  }
+  const edge = new Float32Array(W * H);
+  let maxE = 0.0001;
+  for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+    const j = y * W + x;
+    const gx = -lumS[j - W - 1] - 2 * lumS[j - 1] - lumS[j + W - 1] + lumS[j - W + 1] + 2 * lumS[j + 1] + lumS[j + W + 1];
+    const gy = -lumS[j - W - 1] - 2 * lumS[j - W] - lumS[j - W + 1] + lumS[j + W - 1] + 2 * lumS[j + W] + lumS[j + W + 1];
+    const e = Math.hypot(gx, gy);
+    edge[j] = e; if (e > maxE) maxE = e;
+  }
+  for (let j = 0; j < W * H; j++) edge[j] = pcbClamp(edge[j] / maxE, 0, 1);
+  return { W, H, lum: lumS, mask, edge };
+}
+/* Peso de um ponto conforme o Source Mode: onde os traces querem nascer e andar. */
+function pcbPeso(campos, op, x, y) {
+  if (x < 0 || y < 0 || x >= campos.W || y >= campos.H) return 0;
+  const j = y * campos.W + x;
+  const m = campos.mask[j], e = campos.edge[j];
+  const lumW = op.invert ? 1 - campos.lum[j] : campos.lum[j];
+  if (op.sourceMode === 'silhouette') return m;
+  if (op.sourceMode === 'edges') return e * (0.25 + 0.75 * m);
+  if (op.sourceMode === 'brightness') return m * lumW;
+  return m * (0.3 + 0.7 * Math.max(e * (0.35 + op.edgeDetail * 1.3), lumW * 0.6));
+}
+const PCB_DIRS = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
+/* Gera os traces: walkers angulares que seguem o campo da imagem, respeitam
+   espaçamento (grade de ocupação), ramificam e param no sujeito (clip) ou
+   com orçamento de extensão. Devolve caminhos simplificados (só vértices),
+   terminais, junções e componentes — tudo na grade de análise. */
+function pcbGeraGeo(campos, op) {
+  const { W, H } = campos;
+  const rng = pcbRand(op.seed * 7919 + 13);
+  /* espaçamento: cada walker carimba um disco com seu id; célula de outro
+     walker dentro do raio bloqueia a passagem (o próprio disco, não). */
+  const perto = new Int16Array(W * H);
+  const rad = Math.min(6, Math.max(0, Math.round(op.spacing * 0.9)));
+  let stampSeq = 0;
+  const marca = (x, y, id) => {
+    for (let dy = -rad; dy <= rad; dy++) for (let dx = -rad; dx <= rad; dx++) {
+      const xx = x + dx, yy = y + dy;
+      if (xx >= 0 && yy >= 0 && xx < W && yy < H) perto[yy * W + xx] = id;
+    }
+  };
+  const bloqueado = (x, y, meu) => {
+    for (let dy = -rad; dy <= rad; dy++) for (let dx = -rad; dx <= rad; dx++) {
+      const xx = x + dx, yy = y + dy;
+      if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue;
+      const v = perto[yy * W + xx];
+      if (v && v !== meu) return true;
+    }
+    return false;
+  };
+  const dirsOk = op.angleStyle === 'orthogonal' ? [0, 2, 4, 6] : [0, 1, 2, 3, 4, 5, 6, 7];
+  const prefDir = d => {
+    if (op.direction === 'horizontal') return (d === 0 || d === 4) ? 1 : 0;
+    if (op.direction === 'vertical') return (d === 2 || d === 6) ? 1 : 0;
+    if (op.direction === 'diagonal') return (d % 2 === 1) ? 1 : 0;
+    return 0;
+  };
+  const maxSteps = Math.round(12 + op.pathLength * 180);
+  const extSteps = Math.round(op.extension * maxSteps);
+  const alvo = Math.round(24 + op.density * 476);
+  const paths = [], terms = [], juncs = [];
+  let pontos = 0;
+  const anda = (x0, y0, d0, orcamento, stampPai) => {
+    let x = x0, y = y0, d = d0, fora = 0;
+    const meu = stampPai || ++stampSeq;   // ramo herda o carimbo do pai: é junção, não vizinho
+    const pts = [[x, y]];
+    marca(x, y, meu);
+    for (let s = 0; s < orcamento; s++) {
+      let melhor = -1, melhorNota = -1e9;
+      for (const nd of dirsOk) {
+        const volta = (nd + 4) % 8 === d && pts.length > 1;
+        if (volta) continue;
+        const nx = x + PCB_DIRS[nd][0], ny = y + PCB_DIRS[nd][1];
+        if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+        if (bloqueado(nx, ny, meu)) continue;
+        const dentro = campos.mask[ny * W + nx] > 0.35;
+        if (op.clip && !dentro) continue;
+        let nota = rng() * 0.35 + pcbPeso(campos, op, nx, ny) * (0.4 + op.fidelity * 1.3);
+        if (nd === d) nota += 0.55 * (1 - op.fidelity * 0.5);        // retidão × fidelidade
+        if (op.angleStyle === 'mixed' && nd % 2 === 1) nota -= 0.12; // diagonal custa um pouco
+        nota += prefDir(nd) * 0.3;
+        /* tangente à borda: em modo de bordas/combinado, andar ao longo do contorno */
+        if (op.sourceMode !== 'silhouette' && op.sourceMode !== 'brightness') {
+          const j = y * W + x;
+          const gx = (campos.lum[j + 1] || 0) - (campos.lum[j - 1] || 0);
+          const gy = (campos.lum[j + W] || 0) - (campos.lum[j - W] || 0);
+          const gl = Math.hypot(gx, gy);
+          if (gl > 0.02) {
+            const tx = -gy / gl, ty = gx / gl;
+            nota += Math.abs(PCB_DIRS[nd][0] * tx + PCB_DIRS[nd][1] * ty) * op.edgeDetail * op.fidelity * 0.9;
+          }
+        }
+        if (nota > melhorNota) { melhorNota = nota; melhor = nd; }
+      }
+      if (melhor < 0) break;
+      x += PCB_DIRS[melhor][0]; y += PCB_DIRS[melhor][1]; d = melhor;
+      if (campos.mask[y * W + x] <= 0.35) { fora++; if (fora > extSteps) { pts.push([x, y]); break; } }
+      else fora = 0;
+      pts.push([x, y]); marca(x, y, meu);
+      if (paths.length + terms.length < 4000 && rng() < op.branching * 0.045 && pts.length > 6 && pontos < 60000) {
+        const nd = (d + (rng() < 0.5 ? 1 : 7)) % 8;
+        if (rng() < op.junctionDensity) juncs.push([x, y]);
+        anda(x, y, nd, Math.round(orcamento * 0.55), meu);
+      }
+      if (pontos > 60000) break;
+    }
+    pontos += pts.length;
+    if (pts.length < 3) return;
+    /* simplifica: fica só com os vértices onde a direção muda */
+    const simp = [pts[0]];
+    for (let i = 1; i < pts.length - 1; i++) {
+      const a = pts[i - 1], b = pts[i], c = pts[i + 1];
+      if ((b[0] - a[0]) * (c[1] - b[1]) !== (b[1] - a[1]) * (c[0] - b[0])) simp.push(b);
+    }
+    simp.push(pts[pts.length - 1]);
+    paths.push({ pts: simp, ci: Math.floor(rng() * 997) });
+    if (rng() < op.terminalDensity) terms.push({ x: pts[pts.length - 1][0], y: pts[pts.length - 1][1], ci: paths.length });
+    if (rng() < op.terminalDensity) terms.push({ x: pts[0][0], y: pts[0][1], ci: paths.length });
+  };
+  let tentativas = 0;
+  while (paths.length < alvo && tentativas < alvo * 40 && pontos < 60000) {
+    tentativas++;
+    const x = Math.floor(rng() * W), y = Math.floor(rng() * H);
+    if (perto[y * W + x]) continue;
+    if (rng() > pcbPeso(campos, op, x, y)) continue;
+    anda(x, y, dirsOk[Math.floor(rng() * dirsOk.length)], maxSteps);
+  }
+  /* componentes (chips) espalhados pelo sujeito */
+  const comps = [];
+  const nComp = Math.round(op.componentDensity * 12);
+  let tentC = 0;
+  while (comps.length < nComp && tentC < 300) {
+    tentC++;
+    const x = rng() * W, y = rng() * H;
+    if (campos.mask[Math.floor(y) * W + Math.floor(x)] < 0.6) continue;
+    if (comps.some(c => Math.hypot(c.x - x, c.y - y) < Math.min(W, H) * 0.09)) continue;
+    comps.push({ x, y, w: (0.05 + rng() * 0.08) * W, h: (0.04 + rng() * 0.06) * H, ci: comps.length + 1, centro: false });
+  }
+  if (op.centerChip) {
+    comps.push({ x: op.centerX * W, y: op.centerY * H, w: op.centerSize * Math.min(W, H), h: op.centerSize * Math.min(W, H) * 0.8, ci: 0, centro: true });
+  }
+  const geo = { W, H, paths, terms, juncs, comps };
+  if (op.symmetry) {
+    const mx = pts => pts.map(([x, y]) => [W - 1 - x, y]);
+    geo.paths = paths.concat(paths.map(p => ({ pts: mx(p.pts), ci: p.ci })));
+    geo.terms = terms.concat(terms.map(t => ({ x: W - 1 - t.x, y: t.y, ci: t.ci })));
+    geo.juncs = juncs.concat(juncs.map(([x, y]) => [W - 1 - x, y]));
+    geo.comps = comps.concat(comps.filter(c => !c.centro).map(c => ({ ...c, x: W - 1 - c.x })));
+  }
+  return geo;
+}
+/* PCB_PURO_FIM */
+
+const PCB_PRESETS = {
+  pcbPresetCyan: { pal: ['#2fd8e8', '#9ff3ff', '#ffd166'], bg: '#0a1e24' },
+  pcbPresetWhite: { pal: ['#f5f5f5', '#ff3b30', '#9a9a9a'], bg: '#050505' },
+  pcbPresetGreen: { pal: ['#7dff8a', '#d8ffd8', '#ffb347'], bg: '#06280f' },
+};
+/* Desenha a geometria (grade de análise) num canvas W×H. sampler(x, y) lê a
+   cor da fonte num ponto da grade (para o modo From source image). */
+function pcbDesenha(W, H, geo, op, p, sampler) {
+  const cv = fx7NewCanvas(W, H), g = cv.getContext('2d');
+  const sx = W / geo.W, sy = H / geo.H;
+  const pal = op.palette;
+  const corDe = (ci, x, y) => {
+    if (p.colorMode === 'source' && sampler) return sampler(x, y);
+    if (p.colorMode === 'seeded') return pal[Math.abs(ci) % pal.length];
+    return pal[Math.abs(ci) % pal.length];
+  };
+  if (p.transparentBg !== 'yes') { g.fillStyle = p.bgColor || '#0a1e24'; g.fillRect(0, 0, W, H); }
+  const escala = Math.max(0.6, (Number(p.traceWidth) || 2) * (W / 1024));
+  g.lineWidth = escala;
+  g.lineCap = p.corner === 'rounded' ? 'round' : 'square';
+  g.lineJoin = p.corner === 'rounded' ? 'round' : 'miter';
+  geo.paths.forEach((caminho, i) => {
+    const [x0, y0] = caminho.pts[0];
+    g.strokeStyle = corDe(p.colorMode === 'cycle' ? i : caminho.ci, x0, y0);
+    g.beginPath();
+    caminho.pts.forEach(([x, y], k) => {
+      const px = (x + 0.5) * sx, py = (y + 0.5) * sy;
+      if (k === 0) g.moveTo(px, py);
+      else if (p.corner === 'rounded' && k < caminho.pts.length - 1) {
+        const [nx, ny] = caminho.pts[k + 1];
+        g.quadraticCurveTo(px, py, (px + (nx + 0.5) * sx) / 2, (py + (ny + 0.5) * sy) / 2);
+      }
+      else g.lineTo(px, py);
+    });
+    g.stroke();
+  });
+  const rTerm = Math.max(0.8, (Number(p.terminalSize) || 4) * (W / 1024) * 0.5);
+  geo.terms.forEach((t, i) => {
+    g.fillStyle = corDe(p.colorMode === 'cycle' ? t.ci : t.ci, t.x, t.y);
+    const px = (t.x + 0.5) * sx, py = (t.y + 0.5) * sy;
+    g.beginPath();
+    if (i % 2) g.rect(px - rTerm, py - rTerm, rTerm * 2, rTerm * 2);
+    else g.arc(px, py, rTerm, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = p.transparentBg === 'yes' ? 'rgba(0,0,0,0.55)' : (p.bgColor || '#0a1e24');
+    g.beginPath(); g.arc(px, py, rTerm * 0.38, 0, Math.PI * 2); g.fill();
+  });
+  const rJ = Math.max(0.7, (Number(p.junctionSize) || 3) * (W / 1024) * 0.5);
+  g.fillStyle = pal[0];
+  for (const [x, y] of geo.juncs) { g.beginPath(); g.arc((x + 0.5) * sx, (y + 0.5) * sy, rJ, 0, Math.PI * 2); g.fill(); }
+  /* chips: corpo vazado, miolo e pinos com terminal */
+  for (const c of geo.comps) {
+    const cw = c.w * sx, ch = c.h * sy, cx = c.x * sx, cy = c.y * sy;
+    g.strokeStyle = corDe(c.ci + 1, c.x, c.y);
+    g.lineWidth = Math.max(0.8, escala * (c.centro ? 1.3 : 1));
+    g.strokeRect(cx - cw / 2, cy - ch / 2, cw, ch);
+    g.strokeRect(cx - cw / 4, cy - ch / 4, cw / 2, ch / 2);
+    const pinos = c.centro ? 7 : 5, passo = cw / (pinos + 1), comp = Math.min(cw, ch) * 0.16;
+    g.beginPath();
+    for (let k = 1; k <= pinos; k++) {
+      const px = cx - cw / 2 + passo * k;
+      g.moveTo(px, cy - ch / 2); g.lineTo(px, cy - ch / 2 - comp);
+      g.moveTo(px, cy + ch / 2); g.lineTo(px, cy + ch / 2 + comp);
+    }
+    g.stroke();
+    g.fillStyle = corDe(c.ci + 1, c.x, c.y);
+    for (let k = 1; k <= pinos; k++) {
+      const px = cx - cw / 2 + passo * k;
+      g.beginPath(); g.arc(px, cy - ch / 2 - comp, rJ, 0, Math.PI * 2); g.fill();
+      g.beginPath(); g.arc(px, cy + ch / 2 + comp, rJ, 0, Math.PI * 2); g.fill();
+    }
+  }
+  return cv;
+}
+/* Render completo do nó PCB: análise (≤256px) → geometria em cache →
+   desenho → máscara opcional → composição com a fonte (Mix/Blend/Opacity).
+   Cor e composição NÃO regeneram a geometria: a chave do cache só inclui
+   a imagem quantizada e os parâmetros que mudam o layout. */
+function pcbRender(n, srcCv, maskCv) {
+  const p = n.params;
+  const W = srcCv.width, H = srcCv.height;
+  const op = pcbOpcoes(p);
+  const esc = Math.min(1, 256 / Math.max(W, H));
+  const aW = Math.max(8, Math.round(W * esc)), aH = Math.max(8, Math.round(H * esc));
+  const ana = fx7NewCanvas(aW, aH), ag = ana.getContext('2d', { willReadFrequently: true });
+  ag.drawImage(srcCv, 0, 0, aW, aH);
+  const dados = ag.getImageData(0, 0, aW, aH);
+  const campos = pcbCamposDe(dados.data, aW, aH, op);
+  let chave = aW + 'x' + aH + '|';
+  for (let j = 0; j < campos.mask.length; j += 7) chave += ((campos.mask[j] * 15) | 0).toString(16);
+  chave += '|' + [op.sourceMode, op.threshold, op.edgeDetail, op.smoothing, op.fidelity, op.invert, op.seed, op.density, op.spacing, op.pathLength, op.branching, op.angleStyle, op.direction, op.terminalDensity, op.junctionDensity, op.componentDensity, op.centerChip, op.centerX, op.centerY, op.centerSize, op.symmetry, op.clip, op.extension].join(',');
+  if (!n.runtime.pcbGeo || n.runtime.pcbChave !== chave) {
+    n.runtime.pcbGeo = pcbGeraGeo(campos, op);
+    n.runtime.pcbChave = chave;
+  }
+  const sampler = (x, y) => {
+    const px = Math.max(0, Math.min(aW - 1, Math.round(x))), py = Math.max(0, Math.min(aH - 1, Math.round(y)));
+    const i = (py * aW + px) * 4, d = dados.data;
+    return `rgb(${d[i]},${d[i + 1]},${d[i + 2]})`;
+  };
+  let arte = pcbDesenha(W, H, n.runtime.pcbGeo, op, p, sampler);
+  /* máscara ligada: limita a arte à região (luminância × Mask Influence) */
+  if (maskCv) {
+    const inf = pcbClamp(Number(p.maskInfluence ?? 100), 0, 100) / 100;
+    if (inf > 0) {
+      const mc = fx7NewCanvas(W, H), mg = mc.getContext('2d', { willReadFrequently: true });
+      mg.drawImage(maskCv, 0, 0, W, H);
+      const md = mg.getImageData(0, 0, W, H), dd = md.data;
+      for (let i = 0; i < dd.length; i += 4) {
+        const lum = (0.2126 * dd[i] + 0.7152 * dd[i + 1] + 0.0722 * dd[i + 2]) / 255;
+        dd[i] = 255; dd[i + 1] = 255; dd[i + 2] = 255;
+        dd[i + 3] = Math.round(255 * ((1 - inf) + inf * lum));
+      }
+      mg.putImageData(md, 0, 0);
+      const ag2 = arte.getContext('2d');
+      ag2.globalCompositeOperation = 'destination-in';
+      ag2.drawImage(mc, 0, 0);
+      ag2.globalCompositeOperation = 'source-over';
+    }
+  }
+  const mix = pcbClamp(Number(p.mix ?? 100), 0, 100) / 100;
+  const opa = pcbClamp(Number(p.opacity ?? 100), 0, 100) / 100;
+  if (mix >= 1 && opa >= 1 && p.transparentBg === 'yes') return arte;
+  const out = fx7NewCanvas(W, H), og = out.getContext('2d');
+  if (!(mix >= 1 && p.transparentBg === 'yes')) og.drawImage(srcCv, 0, 0);
+  og.globalAlpha = mix * opa;
+  og.globalCompositeOperation = ({ normal: 'source-over', add: 'lighter' })[p.blend] || p.blend || 'source-over';
+  og.drawImage(arte, 0, 0);
+  og.globalAlpha = 1; og.globalCompositeOperation = 'source-over';
+  return out;
+}
+/* Controle da paleta do PCB: 2–8 cores editáveis, reordenáveis. */
+function makePcbPaletteControl(n) {
+  const wrap = E('div', 'stack');
+  const list = E('div', 'stk-list');
+  const bar = E('div', 'stk-bar');
+  const add = E('button', 'stk-btn', '+ Add Color');
+  add.title = 'Add a color to the palette (maximum 8)';
+  bar.append(add);
+  wrap.append(list, bar);
+  const cores = () => {
+    if (!Array.isArray(n.params.palette) || n.params.palette.length < 2) n.params.palette = [...PCB_PALETA_PADRAO];
+    return n.params.palette;
+  };
+  const render = () => {
+    list.innerHTML = '';
+    const pal = cores();
+    pal.forEach((cor, idx) => {
+      const row = E('div', 'stk-item');
+      const head = E('div', 'stk-head');
+      const inp = document.createElement('input');
+      inp.type = 'color'; inp.value = cor;
+      inp.title = 'Palette color ' + (idx + 1);
+      inp.addEventListener('pointerdown', e => { e.stopPropagation(); selectFromControl(n); });
+      inp.addEventListener('input', () => { n.params.palette[idx] = inp.value; markDirty(n.id); requestRender(); });
+      inp.addEventListener('change', () => commit());
+      const nome = E('span', 'stk-name', 'Color ' + (idx + 1) + ' · ' + cor.toUpperCase());
+      const mk = (txt, title, fn, dis) => {
+        const b = E('button', 'stk-btn', txt); b.title = title; b.disabled = !!dis;
+        b.addEventListener('click', e => { e.stopPropagation(); fn(); });
+        return b;
+      };
+      head.append(inp, nome,
+        mk('▲', 'Move up', () => { [pal[idx - 1], pal[idx]] = [pal[idx], pal[idx - 1]]; markDirty(n.id); render(); requestRender(); commit(); }, idx === 0),
+        mk('▼', 'Move down', () => { [pal[idx + 1], pal[idx]] = [pal[idx], pal[idx + 1]]; markDirty(n.id); render(); requestRender(); commit(); }, idx === pal.length - 1),
+        mk('✕', 'Remove color (minimum 2)', () => { pal.splice(idx, 1); markDirty(n.id); render(); requestRender(); commit(); }, pal.length <= 2));
+      row.append(head);
+      list.append(row);
+    });
+    add.disabled = pal.length >= 8;
+  };
+  add.addEventListener('click', e => {
+    e.stopPropagation();
+    const pal = cores();
+    if (pal.length >= 8) return;
+    pal.push('#ffffff');
+    markDirty(n.id); render(); requestRender(); commit();
+  });
+  n.ui.pcbpal = render;
+  render();
+  return wrap;
+}
 function lwRand(seed) {
   let t = seed >>> 0;
   return () => {
@@ -11655,6 +12124,14 @@ function makeActionButton(n, p) {
   b.addEventListener('click', e => {
     e.stopPropagation();
     if (p.action === 'palExportGpl') palExportGpl(n);
+    else if (PCB_PRESETS[p.action]) {
+      const pr = PCB_PRESETS[p.action];
+      n.params.palette = [...pr.pal];
+      n.params.bgColor = pr.bg;
+      if (n.ui.pcbpal) n.ui.pcbpal();
+      if (n.ui.bgColor) n.ui.bgColor();
+      markDirty(n.id); requestRender(); commit();
+    }
     else if (p.action === 'openVector') openVectorEditor(n);
     else if (p.action === 'audPulso') audDialogo(n.id);
     else if (p.action === 'resetVector') {
@@ -26228,6 +26705,10 @@ const RUN = {
     if (!a) return null;
     return fx7Canvas(a, (s, W2, H2) => lwRender(s, W2, H2, p, m ? fx7SrcCanvas(m) : null, bgCv));
   },
+  pcbEffect: (n, [a, m]) => {
+    if (!a) return null;
+    return cpuRes(pcbRender(n, readResult(a), m ? readResult(m) : null));
+  },
   magicGen: (n) => {
     const p = n.params;
     const W = clamp(Math.round(Number(p.fw) || 1024), 1, 8192), H = clamp(Math.round(Number(p.fh) || 1024), 1, 8192);
@@ -29727,6 +30208,7 @@ function buildControls(n, body) {
     else if (p.type === 'lock') el = makeLock(n, p);
     else if (p.type === 'font') el = makeFont(n, p);
     else if (p.type === 'stack') el = makeStackControl(n);
+    else if (p.type === 'pcbpal') el = makePcbPaletteControl(n);
     else if (p.type === 'layers') el = makeLayersControl(n);
     else if (p.type === 'info') el = makeInfoLine(n, p);
     else if (p.type === 'gpins') el = makeGradientPins(n);
