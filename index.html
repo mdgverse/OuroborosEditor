@@ -605,7 +605,7 @@ body.it-mode #tlPanel{display:none}
 
 /* Versão do editor — o arquivo VERSION na raiz é a fonte da verdade
    (o build do APK usa o mesmo número no versionName e falha se divergir). */
-const APP_VERSION = '1.20.0';
+const APP_VERSION = '1.21.0';
 /* tooltip do botão da marca: só o nome do produto (a versão é metadado, não entra na marca) */
 {
   const marca = document.getElementById('brandBtn');
@@ -24253,8 +24253,7 @@ function wfPinta(q, cat, chipsBar, lista, qtd) {
     const grade = E('div', 'wf-grid');
     for (const t of itens) {
       achados++;
-      const b = E('button', 'wf-t');
-      b.type = 'button';
+      const b = E('div', 'wf-t');
       b.dataset.wf = t.id;
       b.append(E('div', 'wf-tn', t.nome));
       b.append(E('div', 'wf-td', t.desc));
@@ -24266,6 +24265,13 @@ function wfPinta(q, cat, chipsBar, lista, qtd) {
         chips.append(E('span', 'wf-aud', 'Pulse' + ':' + ' ' + (NODE_TYPES[t.nos[t.alvo][0]].title) + ' → ' + (nomeParamDe(t.nos[t.alvo][0], t.chave))));
       }
       b.append(chips);
+      const rodapeT = E('div', 'wf-urodape');
+      const bAddT = E('button', 'wf-umenor', '＋ Adicionar ao projeto');
+      bAddT.type = 'button';
+      bAddT.title = 'Adiciona este grafo ao projeto atual, sem apagar nada (em vez de aplicar do zero)';
+      bAddT.addEventListener('click', e => { e.stopPropagation(); wfInsere(t.id); const sc = document.getElementById('wfScr'); if (sc) sc.remove(); });
+      rodapeT.append(bAddT);
+      b.append(rodapeT);
       b.addEventListener('click', () => { wfCria(t.id); const sc = document.getElementById('wfScr'); if (sc) sc.remove(); });
       grade.append(b);
     }
@@ -24298,8 +24304,12 @@ function wfPintaMeus(q, cat, lista) {
     const btns = E('div', 'wf-ubtns');
     const bAplicar = E('button', 'wf-uaplicar', 'Aplicar');
     bAplicar.type = 'button';
-    bAplicar.title = 'Monta este workflow no editor (como os modelos prontos)';
+    bAplicar.title = 'Monta este workflow no editor substituindo o grafo atual (como os modelos prontos)';
     bAplicar.addEventListener('click', () => { wfCria(w.id); const sc = document.getElementById('wfScr'); if (sc) sc.remove(); });
+    const bAdicionar = E('button', 'wf-umenor', '＋ Adicionar');
+    bAdicionar.type = 'button';
+    bAdicionar.title = 'Adiciona este grafo ao projeto atual, sem apagar nada do que já existe';
+    bAdicionar.addEventListener('click', () => { wfInsere(w.id); const sc = document.getElementById('wfScr'); if (sc) sc.remove(); });
     const bAtualizar = E('button', 'wf-umenor', 'Atualizar');
     bAtualizar.type = 'button';
     bAtualizar.title = 'Substitui o conteúdo salvo pelo grafo aberto agora no editor';
@@ -24307,7 +24317,7 @@ function wfPintaMeus(q, cat, lista) {
     const bExcluir = E('button', 'wf-umenor wf-udel', 'Excluir');
     bExcluir.type = 'button';
     bExcluir.addEventListener('click', () => wfUserDelete(w.id));
-    btns.append(bAplicar, bAtualizar, bExcluir);
+    btns.append(bAplicar, bAdicionar, bAtualizar, bExcluir);
     rodape.append(btns);
     card.append(rodape);
     grade.append(card);
@@ -35912,6 +35922,16 @@ function wfGraphToTemplate(data) {
   }
   return { nos, liga, wireCurve: data && data.wireCurve ? copia(data.wireCurve) : undefined };
 }
+/* 1.21.0 — onde o grafo inserido pousa: à direita do grafo atual (com
+   folga), alinhado pelo topo. Projeto vazio ou grafo vazio: sem deslocar. */
+function svDeslocInsercao(existentes, novos) {
+  if (!existentes || !existentes.length || !novos || !novos.length) return { dx: 0, dy: 0 };
+  const maxX = Math.max(...existentes.map(n => (n.x || 0) + 240));
+  const minX = Math.min(...novos.map(n => n.x || 0));
+  const minYE = Math.min(...existentes.map(n => n.y || 0));
+  const minYN = Math.min(...novos.map(n => n.y || 0));
+  return { dx: Math.round(maxX + 120 - minX), dy: Math.round(minYE - minYN) };
+}
 /* SV_PURO_FIM */
 
 function svEstilo() {
@@ -36073,6 +36093,138 @@ async function loadGraphData(data) {
   commit();
   frameAll();
   setStatus('Graph loaded.');
+}
+
+/* =========================================================
+   1.21.0 — ADICIONAR um grafo salvo ao projeto atual (sem recomeçar).
+   Até a 1.20, aplicar um Workflow ou abrir um arquivo de grafo substituía
+   tudo (restoreGraph/wfCria). Aqui o grafo salvo entra como um conjunto
+   NOVO ao lado do que já existe: ids novos, links internos religados,
+   nós atuais intocados. Se o projeto já tem um Output, o Output do grafo
+   inserido é ignorado (o editor trabalha com um só) e a cadeia dele fica
+   livre para o usuário ligar — o status avisa. Projeto vazio: o Output
+   inserido vira o preview, como numa aplicação normal.
+   ========================================================= */
+function svInserirGrafo(nosData, linksData, nome) {
+  const lista = (nosData || []).filter(nd => nd && nd.type);
+  if (!lista.length) { setStatus('Nada para adicionar: o grafo salvo está vazio.', true); return null; }
+  const tinhaNos = nodes.size > 0;
+  const outExistente = outputNode();
+  const desloc = svDeslocInsercao([...nodes.values()], lista);
+  const mapa = new Map();
+  const criados = [];
+  let outputIgnorado = false;
+  for (const nd of lista) {
+    let tipo = nd.type;
+    if (tipo === 'spraydelic') tipo = 'vandal';        // nomes antigos, como no restoreGraph
+    if (tipo === 'halftone') tipo = 'halfmode';
+    if (!NODE_TYPES[tipo]) { mapa.set(nd.id, null); continue; }
+    if (tipo === 'output' && outExistente) { mapa.set(nd.id, null); outputIgnorado = true; continue; }
+    const opts = {};
+    if (nd.params) { try { opts.params = JSON.parse(JSON.stringify(nd.params)); } catch (e) {} }
+    if (nd.collapsed) opts.collapsed = true;
+    if (nd.tf) opts.tf = nd.tf;
+    if (nd.imgId != null) opts.imgId = nd.imgId;
+    if (nd.bypass) opts.bypass = true;
+    const n = createNode(tipo, Math.round((nd.x || 0) + desloc.dx), Math.round((nd.y || 0) + desloc.dy), Object.keys(opts).length ? opts : undefined);
+    mapa.set(nd.id, n);
+    criados.push(n);
+  }
+  let ligados = 0;
+  for (const l of (linksData || [])) {
+    const a = mapa.get(l.from), b = mapa.get(l.to);
+    if (a && b && connect(a.id, b.id, l.input || 0, l.out || 0)) ligados++;
+  }
+  if (!criados.length) { setStatus('Nada para adicionar: nenhum nó compatível.', true); return null; }
+  selected.clear();
+  for (const n of criados) selected.add(n.id);
+  refreshSelection();
+  drawLinks();
+  commit();
+  requestRender();
+  if (!tinhaNos) {
+    const o = criados.find(n => n.type === 'output');
+    if (o) previewId = o.id;
+    frameAll();
+  }
+  setStatus('Grafo adicionado ao projeto' + (nome ? ' (' + nome + ')' : '') + ': ' + criados.length + ' nós novos, ' + ligados + ' ligações — o que já existia ficou intacto.' +
+    (outputIgnorado ? ' O Output do grafo inserido foi ignorado (já existe um): ligue a cadeia nova ao seu Output.' : ''));
+  return criados;
+}
+/* Adiciona um Workflow (pronto ou do usuário) ao projeto atual. */
+function wfInsere(id) {
+  const t = WF_TEMPLATES.concat(wfUserList).find(x => x.id === id);
+  if (!t) return null;
+  const nosData = (t.nos || []).map((item, i) => {
+    const [tipo, x, y, params] = item;
+    const extra = item[4] || {};
+    return { id: i, type: tipo, x: x || 60, y: y || 120, params, collapsed: extra.collapsed, tf: extra.tf };
+  });
+  const linksData = (t.liga || []).map(l => ({ from: l[0], to: l[1], input: l[2] || 0, out: l[3] || 0 }));
+  return svInserirGrafo(nosData, linksData, t.nome);
+}
+/* Adiciona o grafo de um ARQUIVO (.nodeimg.json) ao projeto atual:
+   importa as imagens embutidas como o loadGraphData faz, e insere. */
+async function inserirGraphData(data) {
+  const idMap = new Map();
+  for (const [oldId, val] of Object.entries(data.images || {})) {
+    const nid = nextImgId++;
+    imageStore.set(nid, await mediaRecDeGuardado(val));
+    idMap.set(Number(oldId), nid);
+  }
+  for (const nd of data.nodes || []) if (nd.imgId != null) nd.imgId = idMap.has(nd.imgId) ? idMap.get(nd.imgId) : null;
+  remapMasks(data, await importMasks(data.masks));
+  const nosData = (data.nodes || []).map(nd => ({ id: nd.id, type: nd.type, x: nd.x, y: nd.y, params: nd.params, collapsed: nd.collapsed, tf: nd.tf, imgId: nd.imgId, bypass: nd.bypass }));
+  const linksData = (data.links || []).map(l => ({ from: l.from, to: l.to, input: l.input || 0, out: l.out || 0 }));
+  return svInserirGrafo(nosData, linksData, 'arquivo');
+}
+/* Abrir um arquivo de grafo pelo editor (botão Load): com projeto aberto,
+   pergunta se ADICIONA ou SUBSTITUI; vazio, abre como sempre. */
+async function abrirGrafoEscolhido(file) {
+  const data = JSON.parse(await file.text());
+  if (nodes.size) { svEscolhaAbrirGrafo(data, file.name); return; }
+  await loadGraphData(data);
+}
+function svEscolhaAbrirGrafo(data, nomeArq) {
+  svEstilo();
+  svFecharBack();
+  const back = E('div', 'xdlg-back'); back.id = 'svBack';
+  const box = E('div', 'xdlg'); box.style.width = 'min(440px,100%)';
+  box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true');
+  box.append(E('h3', '', 'Abrir grafo salvo'));
+  box.append(E('div', 'sv-pergunta', 'Como abrir “' + (nomeArq || 'grafo') + '”?'));
+  box.append(E('div', 'sv-atual', 'O projeto atual tem ' + nodes.size + ' nós — nada é apagado se você adicionar.'));
+  const opt = (prim, ico, tit, desc, fn) => {
+    const b = E('button', 'sv-opt' + (prim ? ' sv-prim' : ''));
+    b.type = 'button';
+    const tx = E('span', 'sv-txt');
+    tx.append(E('span', 'sv-opt-t', tit), E('span', 'sv-opt-d', desc));
+    b.append(E('span', 'sv-ico', ico), tx);
+    b.addEventListener('click', () => { fechar(); fn(); });
+    return b;
+  };
+  box.append(opt(true, '➕', 'Adicionar ao projeto atual', 'O grafo salvo entra ao lado do que já existe, com nós e ligações próprios', () => {
+    inserirGraphData(data).catch(() => setStatus('Não consegui adicionar o grafo.', true));
+  }));
+  box.append(opt(false, '♻', 'Substituir o projeto atual', 'Fecha o grafo de agora e abre o salvo do zero, como sempre foi', () => {
+    loadGraphData(data).catch(() => setStatus('Não consegui abrir o grafo.', true));
+  }));
+  const acoes = E('div', 'xbtns');
+  const bCanc = E('button', '', 'Cancelar'); bCanc.type = 'button';
+  bCanc.addEventListener('click', () => fechar());
+  acoes.append(bCanc);
+  box.append(acoes);
+  back.append(box);
+  document.body.append(back);
+  function fechar() {
+    back.remove();
+    document.removeEventListener('keydown', onKey, true);
+    if (closeDialogFn === fechar) closeDialogFn = null;
+  }
+  function onKey(ev) { if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); fechar(); } }
+  document.addEventListener('keydown', onKey, true);
+  back.addEventListener('mousedown', ev => { if (ev.target === back) fechar(); });
+  closeDialogFn = fechar;
 }
 
 function downloadBlob(blob, name) {
@@ -36705,7 +36857,7 @@ $('#btnLoad').addEventListener('click', () => graphInput.click());
 $('#btnExport').addEventListener('click', exportPNG);
 graphInput.addEventListener('change', () => {
   const f = graphInput.files[0];
-  if (f) loadGraphFile(f).catch(err => setStatus('Invalid file: ' + err.message, true));
+  if (f) abrirGrafoEscolhido(f).catch(err => setStatus('Invalid file: ' + err.message, true));
   graphInput.value = '';
 });
 
