@@ -115,6 +115,8 @@ jobs:
         run: node tests/palette-lut.test.mjs
       - name: Interactive Tools (camadas, histórico, modos e integração)
         run: node tests/interactive-tools.test.mjs
+      - name: PCB (análise da imagem, geometria determinística e paleta)
+        run: node tests/pcb.test.mjs
       - name: Versão (VERSION = index.html = APK)
         run: node tests/version.test.mjs
       - name: Higiene (código morto, CSS sem uso, reference/ fora)
