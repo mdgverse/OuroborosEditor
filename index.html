@@ -605,7 +605,7 @@ body.it-mode #tlPanel{display:none}
 
 /* Versão do editor — o arquivo VERSION na raiz é a fonte da verdade
    (o build do APK usa o mesmo número no versionName e falha se divergir). */
-const APP_VERSION = '1.24.0';
+const APP_VERSION = '1.25.0';
 /* tooltip do botão da marca: só o nome do produto (a versão é metadado, não entra na marca) */
 {
   const marca = document.getElementById('brandBtn');
@@ -3072,6 +3072,13 @@ const NODE_TYPES = {
       ENUM('fDir', 'Flame Direction', [['up', 'Up'], ['down', 'Down'], ['left', 'Left'], ['right', 'Right']], 'up'),
       ENUM('fColor', 'Flame Color', [['natural', 'Natural Fire'], ['blue', 'Blue'], ['green', 'Green'], ['violet', 'Violet']], 'natural'),
       ENUM('fPlace', 'Flame Placement', [['over', 'Over the layer'], ['behind', 'Behind the layer']], 'over'),
+      NUM('fWidth', 'Flame Width', 10, 200, 100), NUM('fDensity', 'Flame Density', 0, 100, 100),
+      NUM('fSpread', 'Flame Spread', 0, 100, 0), NUM('fVar', 'Flame Variation', 0, 100, 0),
+      NUM('fSpeed', 'Animation Speed', 0, 100, 0), NUM('fOsc', 'Oscillation', 0, 100, 0),
+      NUM('fDetail', 'Detail', 0, 100, 50), NUM('fEdge', 'Edge Distortion', 0, 100, 0),
+      NUM('fIntensity', 'Intensity', 0, 200, 100), NUM('fBright', 'Brightness', 0, 200, 100),
+      NUM('fContrast', 'Contrast', 0, 100, 50), NUM('fCore', 'Core Intensity', 0, 100, 0),
+      NUM('fGlow', 'Glow', 0, 100, 0), NUM('fGrad', 'Color Gradient', 0, 100, 50),
       NUM('dLength', 'Drip Length', 0, 100, 40),
       NUM('dSize', 'Drip Width', 1, 24, 6),
       NUM('dDensity', 'Drip Density', 0, 100, 55),
@@ -11639,7 +11646,7 @@ const WORLD_COMUM = ['mode', 'shapeMode', 'threshold', 'softness', 'seed', 'seed
 const WORLD_VIS = {
   extrude: [...WORLD_COMUM, 'depth', 'dirAngle', 'taper', 'shadowI', 'brightI'],
   chrome: [...WORLD_COMUM, 'bevel', 'roundness', 'env', 'shine', 'cRefl', 'cContrast', 'cDistort', 'cSurf', 'cRough', 'cHighlight', 'cMetal', 'cTint', 'cExpo'],
-  flame: [...WORLD_COMUM, 'fHeight', 'fTurb', 'fDir', 'fColor', 'fPlace'],
+  flame: [...WORLD_COMUM, 'fHeight', 'fTurb', 'fDir', 'fColor', 'fPlace', 'fWidth', 'fDensity', 'fSpread', 'fVar', 'fSpeed', 'fOsc', 'fDetail', 'fEdge', 'fIntensity', 'fBright', 'fContrast', 'fCore', 'fGlow', 'fGrad'],
   drip: [...WORLD_COMUM, 'dLength', 'dSize', 'dDensity'],
 };
 function worldKeysVisiveis(params) { return new Set(WORLD_VIS[(params && params.mode) || 'extrude'] || WORLD_VIS.extrude); }
@@ -11685,6 +11692,21 @@ function worldOpcoes(p) {
     fDir: ['up', 'down', 'left', 'right'].includes(p.fDir) ? p.fDir : 'up',
     fColor: ['natural', 'blue', 'green', 'violet'].includes(p.fColor) ? p.fColor : 'natural',
     fPlace: p.fPlace === 'behind' ? 'behind' : 'over',
+    fWidth: worldClamp(num('fWidth', 100), 10, 200) / 100,
+    fDensity: worldClamp(num('fDensity', 100), 0, 100) / 100,
+    fSpread: worldClamp(num('fSpread', 0), 0, 100) / 100,
+    fVar: worldClamp(num('fVar', 0), 0, 100) / 100,
+    fSpeed: worldClamp(num('fSpeed', 0), 0, 100) / 100,
+    fOsc: worldClamp(num('fOsc', 0), 0, 100) / 100,
+    fDetail: 2 + Math.round(worldClamp(num('fDetail', 50), 0, 100) / 100 * 2),
+    fEdge: worldClamp(num('fEdge', 0), 0, 100) / 100,
+    fIntensity: worldClamp(num('fIntensity', 100), 0, 200) / 100,
+    fBright: worldClamp(num('fBright', 100), 0, 200) / 100,
+    fContrast: worldClamp(num('fContrast', 50), 0, 100) / 100,
+    fCore: worldClamp(num('fCore', 0), 0, 100) / 100,
+    fGlow: worldClamp(num('fGlow', 0), 0, 100) / 100,
+    fGrad: worldClamp(num('fGrad', 50), 0, 100) / 100,
+    tempo: 0,
     dLength: worldClamp(num('dLength', 40), 0, 100) / 100,
     dSize: worldClamp(num('dSize', 6), 1, 24),
     dDensity: worldClamp(num('dDensity', 55), 0, 100) / 100,
@@ -11786,9 +11808,10 @@ function worldHash(ix, iy, seed) {
   h = Math.imul(h ^ (h >>> 13), 1274126177);
   return (((h ^ (h >>> 16)) >>> 0) % 10000) / 10000;
 }
-function worldFbm(x, y, seed) {
+function worldFbm(x, y, seed) { return worldFbmN(x, y, seed, 3); }
+function worldFbmN(x, y, seed, oct) {
   let v = 0, amp = 0.55, tot = 0;
-  for (let o = 0; o < 3; o++) {
+  for (let o = 0; o < Math.max(1, Math.min(6, oct | 0)); o++) {
     const ix = Math.floor(x), iy = Math.floor(y), fx = x - ix, fy = y - iy;
     const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
     const a = worldHash(ix, iy, seed + o * 7), b = worldHash(ix + 1, iy, seed + o * 7);
@@ -11825,6 +11848,27 @@ function worldGeraGotas(baixo, W, H, op) {
     gotas.push({ x, y: baixo[x], len, w: op.dSize * (0.7 + rng() * 0.6) });
   }
   return gotas;
+}
+/* Campo da chama v2 (1.25.0): intensidade num ponto a `dist` do contorno,
+   ao longo do eixo `across`. Junta altura local (variação + bordas
+   irregulares), largura/densidade das labaredas, turbulência com Detail
+   (oitavas), animação pela timeline (o campo sobe e oscila — não é a
+   textura deslizando: a amostragem avança no domínio do ruído) e o
+   contraste. Com os padrões (e tempo parado), equivale ao campo antigo. */
+function worldChamaIntens(dist, across, maxH, op) {
+  if (dist <= 0 || maxH <= 0) return 0;
+  const freq = 0.012 + op.fTurb * 0.035;
+  let maxHLoc = maxH * (0.5 + 0.8 * worldFbm(across * 0.02, op.seed * 3.1, op.seed));
+  if (op.fVar > 0) maxHLoc *= 1 + op.fVar * (worldFbm(across * 0.11, op.seed * 7.7, op.seed) - 0.5) * 1.2;
+  if (op.fEdge > 0) maxHLoc *= 1 - op.fEdge * 0.45 + op.fEdge * 0.9 * worldFbmN(across * 0.33, op.seed * 5.3, op.seed, 2);
+  const fase = (op.tempo || 0) * op.fSpeed * 2.4;
+  const subida = fase * maxH * 0.9;
+  const balanco = Math.sin(fase * 6.283 + dist * 0.06) * op.fOsc * maxH * 0.07;
+  const f = worldFbmN((across + balanco) * freq / op.fWidth, (dist + subida) * freq * 1.7 + op.seed * 17.3, op.seed, op.fDetail);
+  let inten = worldChama(dist, maxHLoc, f);
+  if (op.fDensity < 1) inten *= worldClamp((f - (1 - op.fDensity) * 0.55) / 0.45, 0, 1);
+  if (inten <= 0) return 0;
+  return worldClamp(0.5 + (inten - 0.5) * (op.fContrast * 2), 0, 1);
 }
 /* Intensidade da chama: envelope que decai com a distância ao contorno,
    modulado pelo fbm (turbulência). dist/maxHLoc em [0,1]. */
@@ -11931,27 +11975,69 @@ function worldFlame(ana, W, H, op) {
   const { aW, aH } = ana;
   const cont = worldContornos(ana.shape, aW, aH);
   const maxH = Math.max(2, op.fHeight * aH * 0.6);
-  const freq = 0.012 + op.fTurb * 0.035;
+  /* Flame Spread: colunas/linhas sem contorno tomam emprestado o contorno
+     vizinho mais próximo (até r px), com peso caindo pela distância — o
+     fogo vaza para as laterais da silhueta em vez de parar na borda. */
+  let cTopo = cont.topo, cBaixo = cont.baixo, cEsq = cont.esq, cDir = cont.dir, pesoEixo = null;
+  if (op.fSpread > 0) {
+    const expande = (arr, r) => {
+      const v = arr.slice(), w = new Array(arr.length).fill(1);
+      for (let i = 0; i < arr.length; i++) {
+        if (v[i] >= 0) continue;
+        let achou = -1, bd = 0;
+        for (let k = 1; k <= r; k++) {
+          if (i - k >= 0 && arr[i - k] >= 0) { achou = arr[i - k]; bd = k; break; }
+          if (i + k < arr.length && arr[i + k] >= 0) { achou = arr[i + k]; bd = k; break; }
+        }
+        if (achou >= 0) { v[i] = achou; w[i] = 1 - bd / (r + 1); } else w[i] = 0;
+      }
+      return { v, w };
+    };
+    if (op.fDir === 'up' || op.fDir === 'down') {
+      const r = Math.max(1, Math.round(op.fSpread * aW * 0.09));
+      const eT = expande(cont.topo, r), eB = expande(cont.baixo, r);
+      cTopo = eT.v; cBaixo = eB.v;
+      pesoEixo = eT.w.map((w, i) => Math.max(w, eB.w[i]));
+    } else {
+      const r = Math.max(1, Math.round(op.fSpread * aH * 0.09));
+      const eE = expande(cont.esq, r), eD = expande(cont.dir, r);
+      cEsq = eE.v; cDir = eD.v;
+      pesoEixo = eE.w.map((w, i) => Math.max(w, eD.w[i]));
+    }
+  }
   const fCv = fx7NewCanvas(aW, aH), fg = fCv.getContext('2d');
   const img = fg.createImageData(aW, aH), d = img.data;
+  const gradExp = 1 + (0.5 - op.fGrad) * 1.2;
   for (let y = 0; y < aH; y++) for (let x = 0; x < aW; x++) {
     let dist = -1, across = 0;
-    if (op.fDir === 'up') { const c = cont.topo[x]; if (c >= 0) { dist = c - y; across = x; } }
-    else if (op.fDir === 'down') { const c = cont.baixo[x]; if (c >= 0) { dist = y - c; across = x; } }
-    else if (op.fDir === 'left') { const c = cont.esq[y]; if (c >= 0) { dist = c - x; across = y; } }
-    else { const c = cont.dir[y]; if (c >= 0) { dist = x - c; across = y; } }
+    if (op.fDir === 'up') { const c = cTopo[x]; if (c >= 0) { dist = c - y; across = x; } }
+    else if (op.fDir === 'down') { const c = cBaixo[x]; if (c >= 0) { dist = y - c; across = x; } }
+    else if (op.fDir === 'left') { const c = cEsq[y]; if (c >= 0) { dist = c - x; across = y; } }
+    else { const c = cDir[y]; if (c >= 0) { dist = x - c; across = y; } }
     if (dist <= 0) continue;
-    const maxHLoc = maxH * (0.5 + 0.8 * worldFbm(across * 0.02, op.seed * 3.1, op.seed));
-    const f = worldFbm(across * freq, dist * freq * 1.7 + op.seed * 17.3, op.seed);
-    const inten = worldChama(dist, maxHLoc, f);
+    let inten = worldChamaIntens(dist, across, maxH, op);
     if (inten <= 0.02) continue;
-    const cor = worldChamaCor(op.fColor, inten);
+    if (pesoEixo) { inten *= pesoEixo[across]; if (inten <= 0.02) continue; }
+    const tCor = worldClamp(Math.pow(inten, gradExp) + Math.pow(inten, 3) * op.fCore * 0.8, 0, 1);
+    const cor = worldChamaCor(op.fColor, tCor);
     const i = (y * aW + x) * 4;
-    d[i] = cor[0]; d[i + 1] = cor[1]; d[i + 2] = cor[2]; d[i + 3] = Math.round(inten * 235);
+    d[i] = Math.min(255, cor[0] * op.fBright); d[i + 1] = Math.min(255, cor[1] * op.fBright); d[i + 2] = Math.min(255, cor[2] * op.fBright);
+    d[i + 3] = Math.round(Math.min(1, inten * op.fIntensity) * 235);
   }
   fg.putImageData(img, 0, 0);
   const out = fx7NewCanvas(W, H), og = out.getContext('2d');
   og.drawImage(fCv, 0, 0, W, H);
+  if (op.fGlow > 0) {
+    /* Glow: halo luminoso em volta do fogo (blur reaproveitado do editor),
+       composto por baixo da chama nítida — não é exposição global. */
+    const halo = fx14BlurredCanvas(out, W, H, 5 + op.fGlow * 26);
+    const go = fx7NewCanvas(W, H), gg = go.getContext('2d');
+    gg.globalAlpha = Math.min(1, op.fGlow * 1.1);
+    gg.drawImage(halo, 0, 0);
+    gg.globalAlpha = 1;
+    gg.drawImage(out, 0, 0);
+    return go;
+  }
   return out;
 }
 function worldDrip(ana, W, H, op) {
@@ -11972,6 +12058,9 @@ function worldDrip(ana, W, H, op) {
 /* Render do World: efeito escolhido → máscara opcional → Mix com a fonte. */
 function worldRender(n, srcCv, maskCv) {
   const p = n.params, op = worldOpcoes(p);
+  /* Animação do Flame segue a timeline do editor (play, scrub e export
+     de vídeo usam o mesmo tempo; Speed 0 = chama estática). */
+  if (op.mode === 'flame' && typeof TL !== 'undefined' && TL) op.tempo = Math.max(0, (TL.frame - TL.start) / Math.max(1, TL.fps || 30));
   const W = srcCv.width, H = srcCv.height;
   const ana = worldAnalise(n, srcCv, op);
   let arte;
@@ -39878,6 +39967,7 @@ function tlApplyFrame() {
     const on = !tlIsIdentity(v);
     if (on !== n.animOn) { n.animOn = on; changed = true; }
     if (frameChanged && n.type === 'ascii' && n.params.asciiMode !== 'legacy' && Number(n.params.asciiScramble) > 0) changed = true;
+    if (frameChanged && n.type === 'worldEffect' && n.params.mode === 'flame' && Number(n.params.fSpeed) > 0) changed = true;
     if (changed) { markDirty(n.id); touched++; tlRefreshKeys(n); }
   }
   if (frameChanged) mediaFrameTick();
