@@ -14,10 +14,11 @@ const extrai = (ini, fim) => {
 const NUM = (key, label, min, max, def, step = 1) => ({ type: 'num', key, label, min, max, def, step });
 const ENUM = (key, label, options, def) => ({ type: 'enum', key, label, options, def });
 const BTN = (key, label, action, button) => ({ type: 'button', key, label, action, button, def: '' });
+const COL = (key, label, def) => ({ type: 'color', key, label, def });
 
 /* ---------- definição do nó ---------- */
 const blocoNo = extrai("  worldEffect: {\n    title: 'World'", '  magicGen: {').replace(/^\s*worldEffect:\s*/, '').replace(/,\s*$/, '');
-const noDef = new Function('NUM', 'ENUM', 'BTN', 'return (' + blocoNo + ')')(NUM, ENUM, BTN);
+const noDef = new Function('NUM', 'ENUM', 'BTN', 'COL', 'return (' + blocoNo + ')')(NUM, ENUM, BTN, COL);
 const por = Object.fromEntries(noDef.params.map(d => [d.key, d]));
 const keys = noDef.params.map(d => d.key);
 
@@ -98,6 +99,31 @@ function formaQuadrado() {
   ok(JSON.stringify(P.worldGeraGotas(cont.baixo, W, H, P.worldOpcoes({ mode: 'drip' }))) === JSON.stringify(gotas),
     'Drip determinístico (mesma seed, mesmas gotas)');
   ok(P.worldGeraGotas(cont.baixo, W, H, P.worldOpcoes({ mode: 'drip', dDensity: 0 })).length === 0, 'Drip Density 0 = nenhuma gota');
+}
+
+/* ---------- Chrome aprimorado (1.24.0) ---------- */
+for (const k of ['cRefl', 'cContrast', 'cDistort', 'cSurf', 'cRough', 'cHighlight', 'cMetal', 'cTint', 'cExpo'])
+  ok(keys.includes(k), 'controle de Chrome presente: ' + k);
+ok(por.cTint.type === 'color' && por.cTint.def === '#ffffff', 'Tint é cor (branco = neutro)');
+ok(P.worldKeysVisiveis({ mode: 'chrome' }).has('cRough') && !P.worldKeysVisiveis({ mode: 'extrude' }).has('cRough'), 'controles novos só no Chrome');
+{
+  const opD = P.worldOpcoes({ mode: 'chrome' });
+  const semFonte = P.worldChromeCor(0.8, 0.2, -0.1, opD, 5, 5);
+  const fontePreta = P.worldChromeCor(0.8, 0.2, -0.1, opD, 5, 5, new Uint8ClampedArray([0, 0, 0, 255]), 0);
+  ok(JSON.stringify(semFonte) === JSON.stringify(fontePreta), 'padrões: Metallic Tint 0 ignora a fonte (visual antigo idêntico)');
+  const contraste = P.worldChromeCor(0.8, 0.2, -0.1, P.worldOpcoes({ mode: 'chrome', cContrast: 100 }), 5, 5);
+  ok(JSON.stringify(contraste) !== JSON.stringify(semFonte), 'Reflection Contrast refaz as bandas do reflexo (curva de contorno)');
+  const escuro = P.worldChromeCor(0.8, 0.2, -0.1, P.worldOpcoes({ mode: 'chrome', cExpo: -100 }), 5, 5);
+  const claro = P.worldChromeCor(0.8, 0.2, -0.1, P.worldOpcoes({ mode: 'chrome', cExpo: 100 }), 5, 5);
+  ok(escuro[0] < semFonte[0] && claro[0] >= semFonte[0], 'Exposure: chrome escuro ↔ brilhante');
+  const tingido = P.worldChromeCor(0.8, 0.2, -0.1, P.worldOpcoes({ mode: 'chrome', cTint: '#ff0000' }), 5, 5);
+  ok(tingido[1] < semFonte[1] && tingido[0] === semFonte[0], 'Tint vermelho zera o verde/azul do reflexo (chrome colorido)');
+  const metalVermelho = P.worldChromeCor(0.8, 0.2, -0.1, P.worldOpcoes({ mode: 'chrome', cMetal: 100 }), 5, 5, new Uint8ClampedArray([255, 0, 0, 255]), 0);
+  ok(metalVermelho[1] < semFonte[1] && Math.abs(metalVermelho[0] - semFonte[0]) < 1, 'Metallic Tint: fonte vermelha tingue o metal (G cai, R fica)');
+  const aspero = P.worldChromeCor(0.8, 0, 0, P.worldOpcoes({ mode: 'chrome', cRough: 100 }), 5, 5);
+  const polido = P.worldChromeCor(0.8, 0, 0, opD, 5, 5);
+  ok(JSON.stringify(aspero) !== JSON.stringify(polido), 'Roughness muda a distribuição do especular (não é só intensidade)');
+  ok(P.worldOpcoes({ mode: 'chrome', cExpo: 999 }).cExpo === 1 && P.worldOpcoes({ mode: 'chrome', cTint: 'xyz' }).cTint.join() === '1,1,1', 'valores inválidos contidos (Exposure/Tint)');
 }
 
 /* ---------- fiação ---------- */

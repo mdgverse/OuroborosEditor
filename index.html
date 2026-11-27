@@ -605,7 +605,7 @@ body.it-mode #tlPanel{display:none}
 
 /* Versão do editor — o arquivo VERSION na raiz é a fonte da verdade
    (o build do APK usa o mesmo número no versionName e falha se divergir). */
-const APP_VERSION = '1.23.1';
+const APP_VERSION = '1.24.0';
 /* tooltip do botão da marca: só o nome do produto (a versão é metadado, não entra na marca) */
 {
   const marca = document.getElementById('brandBtn');
@@ -3062,6 +3062,11 @@ const NODE_TYPES = {
       NUM('roundness', 'Corner Roundness', 0, 100, 35),
       ENUM('env', 'Reflection Map', [['sky', 'Sky & Clouds'], ['sunset', 'Sunset'], ['studio', 'Studio'], ['mono', 'Liquid Mono']], 'sky'),
       NUM('shine', 'Shine', 0, 100, 60),
+      NUM('cRefl', 'Reflection Intensity', 0, 200, 100), NUM('cContrast', 'Reflection Contrast', 0, 100, 50),
+      NUM('cDistort', 'Reflection Distortion', 0, 100, 0), NUM('cSurf', 'Surface Distortion', 0, 100, 0),
+      NUM('cRough', 'Roughness', 0, 100, 0), NUM('cHighlight', 'Highlight Focus', 0, 100, 50),
+      NUM('cMetal', 'Metallic Tint', 0, 100, 0), COL('cTint', 'Tint', '#ffffff'),
+      NUM('cExpo', 'Exposure', -100, 100, 0),
       NUM('fHeight', 'Flame Height', 0, 100, 45),
       NUM('fTurb', 'Turbulence', 0, 100, 50),
       ENUM('fDir', 'Flame Direction', [['up', 'Up'], ['down', 'Down'], ['left', 'Left'], ['right', 'Right']], 'up'),
@@ -3924,6 +3929,10 @@ const NODE_TYPES = {
       NUM('mtTaper', 'Trail Taper', 0, 100, 55), NUM('mtCompress', 'Compress Sides', 0, 100, 25),
       NUM('mtCurve', 'Trail Curve', -100, 100, 0), NUM('mtOpacity', 'Trail Opacity', 0, 100, 85),
       NUM('mtMask', 'Mask Selection', 0, 100, 100),
+      ENUM('mtPinsView', 'Trail Pins', [['show', 'Show on preview'], ['hide', 'Hide on preview']], 'show'),
+      NUM('mtPinTaper', 'Pin Taper', 0, 100, 55), NUM('mtPinCompress', 'Pin Compress Sides', 0, 100, 25),
+      NUM('mtPinOpacity', 'Pin Opacity', 0, 100, 85),
+      { type: 'hidden', key: 'mtPins', label: 'Motion Trail pins (Bezier paths)', def: '' },
       ENUM('depthMap', 'Depth map', [['luma', 'Luminance'], ['vertical', 'Vertical']], 'luma'),
       ENUM('invert', 'Invert depth', [['no', 'Normal'], ['yes', 'Invert']], 'no'),
       NUM('depthFocus', 'Focus depth', 0, 100, 50), NUM('depthRange', 'Focus range', 1, 100, 28),
@@ -11629,7 +11638,7 @@ function fx7FastRes(a) {
 const WORLD_COMUM = ['mode', 'shapeMode', 'threshold', 'softness', 'seed', 'seedRandom', 'maskInfluence', 'mix'];
 const WORLD_VIS = {
   extrude: [...WORLD_COMUM, 'depth', 'dirAngle', 'taper', 'shadowI', 'brightI'],
-  chrome: [...WORLD_COMUM, 'bevel', 'roundness', 'env', 'shine'],
+  chrome: [...WORLD_COMUM, 'bevel', 'roundness', 'env', 'shine', 'cRefl', 'cContrast', 'cDistort', 'cSurf', 'cRough', 'cHighlight', 'cMetal', 'cTint', 'cExpo'],
   flame: [...WORLD_COMUM, 'fHeight', 'fTurb', 'fDir', 'fColor', 'fPlace'],
   drip: [...WORLD_COMUM, 'dLength', 'dSize', 'dDensity'],
 };
@@ -11662,6 +11671,15 @@ function worldOpcoes(p) {
     roundness: worldClamp(num('roundness', 35), 0, 100) / 100,
     env: ['sky', 'sunset', 'studio', 'mono'].includes(p.env) ? p.env : 'sky',
     shine: worldClamp(num('shine', 60), 0, 100) / 100,
+    cRefl: worldClamp(num('cRefl', 100), 0, 200) / 100,
+    cContrast: worldClamp(num('cContrast', 50), 0, 100) / 100,
+    cDistort: worldClamp(num('cDistort', 0), 0, 100) / 100,
+    cSurf: worldClamp(num('cSurf', 0), 0, 100) / 100,
+    cRough: worldClamp(num('cRough', 0), 0, 100) / 100,
+    cHighlight: worldClamp(num('cHighlight', 50), 0, 100) / 100,
+    cMetal: worldClamp(num('cMetal', 0), 0, 100) / 100,
+    cTint: (() => { const m = /^#?([0-9a-f]{6})$/i.exec(String(p.cTint || '#ffffff')); if (!m) return [1, 1, 1]; const v = parseInt(m[1], 16); return [((v >> 16) & 255) / 255, ((v >> 8) & 255) / 255, (v & 255) / 255]; })(),
+    cExpo: worldClamp(num('cExpo', 0), -100, 100) / 100,
     fHeight: worldClamp(num('fHeight', 45), 0, 100) / 100,
     fTurb: worldClamp(num('fTurb', 50), 0, 100) / 100,
     fDir: ['up', 'down', 'left', 'right'].includes(p.fDir) ? p.fDir : 'up',
@@ -11722,20 +11740,43 @@ function worldEnvCor(env, t) {
   return stops[stops.length - 1][1];
 }
 /* Cor do chrome num ponto: normal do campo de altura reflete o ambiente;
-   Shine adiciona o especular; a altura sombreia o miolo. */
-function worldChromeCor(h, gx, gy, op) {
+   Shine adiciona o especular; a altura sombreia o miolo.
+   1.24.0 (vídeo "Black Chrome Text"): Surface Distortion perturba as
+   normais (superfície orgânica); Reflection Distortion deforma só a
+   consulta ao ambiente (não a forma); Reflection Contrast refaz as bandas
+   do reflexo (a "curva de contorno" do bevel); Roughness espalha o
+   especular em vez de só apagá-lo; Metallic Tint tingue o reflexo pela
+   cor da fonte; Tint/Exposure fecham a cor (chrome escuro = Mono +
+   Exposure negativa). Com os padrões, a saída é idêntica à anterior. */
+function worldChromeCor(h, gx, gy, op, x, y, srcData, srcI) {
+  if (op.cSurf > 0) {
+    gx += (worldFbm((x || 0) * 0.06 + 13.7, (y || 0) * 0.06, op.seed) - 0.5) * op.cSurf * 1.6;
+    gy += (worldFbm((x || 0) * 0.06, (y || 0) * 0.06 + 7.3, op.seed) - 0.5) * op.cSurf * 1.6;
+  }
   const k = 2.2 + op.bevel * 9;
   let nx = -gx * k, ny = gy * k, nz = 1;
   const l = Math.hypot(nx, ny, nz) || 1;
   nx /= l; ny /= l; nz /= l;
-  const t = worldClamp(0.5 + ny * 0.55 - nx * 0.18 + (h - 0.5) * 0.3, 0, 1);
-  const base = worldEnvCor(op.env, t);
-  const spec = Math.pow(Math.max(0, -nx * 0.35 - ny * 0.75 + nz * 0.55), 6) * op.shine;
+  let t = worldClamp(0.5 + ny * 0.55 - nx * 0.18 + (h - 0.5) * 0.3, 0, 1);
+  if (op.cDistort > 0) t = worldClamp(t + (worldFbm((x || 0) * 0.045 + 3.1, (y || 0) * 0.045, op.seed) - 0.5) * op.cDistort * 0.7, 0, 1);
+  t = worldClamp(0.5 + (t - 0.5) * (op.cContrast * 2), 0, 1);
+  let base = worldEnvCor(op.env, t);
+  if (op.cMetal > 0 && srcData) {
+    const sr = srcData[srcI] / 255, sg = srcData[srcI + 1] / 255, sb = srcData[srcI + 2] / 255;
+    base = [
+      base[0] * (1 - op.cMetal) + base[0] * (0.25 + 0.75 * sr) * op.cMetal,
+      base[1] * (1 - op.cMetal) + base[1] * (0.25 + 0.75 * sg) * op.cMetal,
+      base[2] * (1 - op.cMetal) + base[2] * (0.25 + 0.75 * sb) * op.cMetal,
+    ];
+  }
+  const specPow = (1 + op.cHighlight * 10) * (1 - op.cRough * 0.55);
+  const spec = Math.pow(Math.max(0, -nx * 0.35 - ny * 0.75 + nz * 0.55), Math.max(0.6, specPow)) * op.shine * (1 - op.cRough * 0.45);
   const sombra = 0.5 + 0.62 * worldClamp(h * 1.5, 0, 1);
+  const expo = Math.pow(2, op.cExpo * 1.5), tn = op.cTint;
   return [
-    Math.min(255, base[0] * sombra + spec * 255),
-    Math.min(255, base[1] * sombra + spec * 255),
-    Math.min(255, base[2] * sombra + spec * 255),
+    Math.min(255, (base[0] * sombra * op.cRefl + spec * 255) * expo * tn[0]),
+    Math.min(255, (base[1] * sombra * op.cRefl + spec * 255) * expo * tn[1]),
+    Math.min(255, (base[2] * sombra * op.cRefl + spec * 255) * expo * tn[2]),
     worldClamp((h - 0.02) * 3.2, 0, 1),
   ];
 }
@@ -11870,14 +11911,14 @@ function worldExtrude(srcCv, W, H, op) {
 }
 function worldChrome(ana, W, H, op) {
   const { aW, aH } = ana;
-  const altura = worldSuaviza(ana.shape, aW, aH, Math.round(op.bevel * 7 + op.roundness * 5));
+  const altura = worldSuaviza(ana.shape, aW, aH, Math.round(op.bevel * 7 + op.roundness * 5 + op.cRough * 6));
   const fCv = fx7NewCanvas(aW, aH), fg = fCv.getContext('2d');
   const img = fg.createImageData(aW, aH), d = img.data;
   for (let y = 0; y < aH; y++) for (let x = 0; x < aW; x++) {
     const j = y * aW + x;
     const gx = altura[y * aW + Math.min(aW - 1, x + 1)] - altura[y * aW + Math.max(0, x - 1)];
     const gy = altura[Math.min(aH - 1, y + 1) * aW + x] - altura[Math.max(0, y - 1) * aW + x];
-    const cor = worldChromeCor(altura[j], gx, gy, op);
+    const cor = worldChromeCor(altura[j], gx, gy, op, x, y, ana.dados.data, j * 4);
     const i = j * 4;
     d[i] = cor[0]; d[i + 1] = cor[1]; d[i + 2] = cor[2]; d[i + 3] = Math.round(cor[3] * 255);
   }
@@ -15158,7 +15199,7 @@ function fx13Glass(srcCanvas, W, H, params) {
 }
 
 /* fx14 */
-const FX14_BLUR_DEFAULTS = { blurMode: 'box', bsAmount: 40, bsAngle: 0, bsCenterX: 50, bsCenterY: 50, bsQuality: 'medium', bsPreserveEdges: 'on', dirAngle: 0, dirDistance: 20, dirSamples: 12, radAmount: 30, radCenterX: 50, radCenterY: 50, spinCenterX: 50, spinCenterY: 45, spinSpeed: 18, spinRadius: 28, spinFalloff: 22, spinCount: 24, spinDir: '1', spinIntensity: 100, lensRadius: 6, bokehRadius: 4, radius: 8, passes: 2, mix: 100, textureAmount: 8, texture: 20, motionAmount: 24, motionAngle: 0, motionSamples: 12, mtMode: 'blur', mtScaling: 'fixed', mtTaper: 55, mtCompress: 25, mtCurve: 0, mtOpacity: 85, mtMask: 100, depthMap: 'luma', invert: 'no', depthFocus: 50, depthRange: 28, maxBlur: 18, dofFocusY: 50, dofRange: 28, dofBlur: 12, focusX: 50, focusY: 50, focusRadius: 34, focusBlur: 10, focusVignette: 45, focusShape: 'circle' };
+const FX14_BLUR_DEFAULTS = { blurMode: 'box', bsAmount: 40, bsAngle: 0, bsCenterX: 50, bsCenterY: 50, bsQuality: 'medium', bsPreserveEdges: 'on', dirAngle: 0, dirDistance: 20, dirSamples: 12, radAmount: 30, radCenterX: 50, radCenterY: 50, spinCenterX: 50, spinCenterY: 45, spinSpeed: 18, spinRadius: 28, spinFalloff: 22, spinCount: 24, spinDir: '1', spinIntensity: 100, lensRadius: 6, bokehRadius: 4, radius: 8, passes: 2, mix: 100, textureAmount: 8, texture: 20, motionAmount: 24, motionAngle: 0, motionSamples: 12, mtMode: 'blur', mtScaling: 'fixed', mtTaper: 55, mtCompress: 25, mtCurve: 0, mtOpacity: 85, mtMask: 100, mtPinsView: 'show', mtPinTaper: 55, mtPinCompress: 25, mtPinOpacity: 85, mtPins: '', depthMap: 'luma', invert: 'no', depthFocus: 50, depthRange: 28, maxBlur: 18, dofFocusY: 50, dofRange: 28, dofBlur: 12, focusX: 50, focusY: 50, focusRadius: 34, focusBlur: 10, focusVignette: 45, focusShape: 'circle' };
 // ===== v14: Blur Studio (fxBlurStudio from v1.6) =====
 function fx14Copy(srcCanvas, W, H) {
   const cv = fx7NewCanvas(W, H);
@@ -15288,7 +15329,75 @@ function mtTransforme(t, op, len) {
     alpha: op.opacity * Math.pow(1 - tt, 1.3),
   };
 }
+/* --- Pins de trajetória (1.24.0): cada pin é uma instância do Trail com
+   caminho Bézier cúbico próprio, editável no Preview. Coordenadas em % da
+   imagem (âncora 0..100; ponta/alças podem sair da imagem). taper/
+   compress/opacity são do pin (nascem copiando os globais). --- */
+const MT_MAX_PINS = 12;
+function mtPinParse(json) {
+  let raw = [];
+  try { raw = JSON.parse(json || '[]'); } catch (e) { raw = []; }
+  if (!Array.isArray(raw)) return [];
+  function clA(v) { return Math.min(100, Math.max(0, v)); }
+  function clL(v) { return Math.min(160, Math.max(-60, v)); }
+  const num = (v, d) => { const n = Number(v); return isFinite(n) ? n : d; };
+  return raw.filter(q => q && isFinite(+q.x) && isFinite(+q.y) && isFinite(+q.ex) && isFinite(+q.ey)).slice(0, MT_MAX_PINS).map(q => {
+    const x = clA(+q.x), y = clA(+q.y), ex = clL(+q.ex), ey = clL(+q.ey);
+    return {
+      x, y, ex, ey,
+      c1x: clL(num(q.c1x, x + (ex - x) / 3)), c1y: clL(num(q.c1y, y + (ey - y) / 3)),
+      c2x: clL(num(q.c2x, x + (ex - x) * 2 / 3)), c2y: clL(num(q.c2y, y + (ey - y) * 2 / 3)),
+      taper: Math.min(100, Math.max(0, num(q.taper, 55))),
+      compress: Math.min(100, Math.max(0, num(q.compress, 25))),
+      opacity: Math.min(100, Math.max(0, num(q.opacity, 85))),
+    };
+  });
+}
+function mtPinNovo(x, y, angRad, distPct, base) {
+  const ex = x + Math.cos(angRad) * distPct, ey = y + Math.sin(angRad) * distPct;
+  const b = base || {};
+  return {
+    x, y, ex, ey,
+    c1x: x + (ex - x) / 3, c1y: y + (ey - y) / 3,
+    c2x: x + (ex - x) * 2 / 3, c2y: y + (ey - y) * 2 / 3,
+    taper: b.taper != null ? b.taper : 55, compress: b.compress != null ? b.compress : 25, opacity: b.opacity != null ? b.opacity : 85,
+  };
+}
+/* Ponto e orientação local da Bézier cúbica do pin, em px. */
+function mtBezier(q, t, W, H) {
+  const u = 1 - t;
+  const x0 = q.x / 100 * W, y0 = q.y / 100 * H, x1 = q.c1x / 100 * W, y1 = q.c1y / 100 * H;
+  const x2 = q.c2x / 100 * W, y2 = q.c2y / 100 * H, x3 = q.ex / 100 * W, y3 = q.ey / 100 * H;
+  const x = u * u * u * x0 + 3 * u * u * t * x1 + 3 * u * t * t * x2 + t * t * t * x3;
+  const y = u * u * u * y0 + 3 * u * u * t * y1 + 3 * u * t * t * y2 + t * t * t * y3;
+  const dx = 3 * u * u * (x1 - x0) + 6 * u * t * (x2 - x1) + 3 * t * t * (x3 - x2);
+  const dy = 3 * u * u * (y1 - y0) + 6 * u * t * (y2 - y1) + 3 * t * t * (y3 - y2);
+  return { x, y, ang: Math.atan2(dy, dx) };
+}
+/* Comprimento aproximado do caminho (px) e passos da varredura do pin. */
+function mtPinComprimento(q, W, H) {
+  let len = 0, ant = mtBezier(q, 0, W, H);
+  for (let i = 1; i <= 12; i++) { const p = mtBezier(q, i / 12, W, H); len += Math.hypot(p.x - ant.x, p.y - ant.y); ant = p; }
+  return len;
+}
+function mtPinPassos(lenPx) { return Math.max(4, Math.min(48, Math.ceil(Math.max(0, lenPx) / 6))); }
 /* BLUR_TRAIL_PURO_FIM */
+/* Máscara (Mask Selection) sobre o canvas do rastro: destination-in pela
+   luminância, ponderada pela influência. O sujeito nunca passa por aqui. */
+function fx14TrailGate(tg, W, H, maskCv, inf) {
+  const mc = fx7NewCanvas(W, H), mg = mc.getContext('2d', { willReadFrequently: true });
+  mg.drawImage(maskCv, 0, 0, W, H);
+  const md = mg.getImageData(0, 0, W, H), dd = md.data;
+  for (let i = 0; i < dd.length; i += 4) {
+    const lum = (0.2126 * dd[i] + 0.7152 * dd[i + 1] + 0.0722 * dd[i + 2]) / 255;
+    dd[i] = 255; dd[i + 1] = 255; dd[i + 2] = 255;
+    dd[i + 3] = Math.round(255 * ((1 - inf) + inf * lum));
+  }
+  mg.putImageData(md, 0, 0);
+  tg.globalCompositeOperation = 'destination-in';
+  tg.drawImage(mc, 0, 0);
+  tg.globalCompositeOperation = 'source-over';
+}
 /* Motion Trail: varredura unilateral (o original nítido vai por cima);
    a máscara, quando ligada, limita só o rastro — nunca o sujeito. */
 function fx14MotionTrail(srcCanvas, W, H, p) {
@@ -15308,20 +15417,38 @@ function fx14MotionTrail(srcCanvas, W, H, p) {
     tg.restore();
   }
   tg.globalAlpha = 1;
-  if (p.mtMaskCv && op.maskSel > 0) {
-    const mc = fx7NewCanvas(W, H), mg = mc.getContext('2d', { willReadFrequently: true });
-    mg.drawImage(p.mtMaskCv, 0, 0, W, H);
-    const md = mg.getImageData(0, 0, W, H), dd = md.data, inf = op.maskSel;
-    for (let i = 0; i < dd.length; i += 4) {
-      const lum = (0.2126 * dd[i] + 0.7152 * dd[i + 1] + 0.0722 * dd[i + 2]) / 255;
-      dd[i] = 255; dd[i + 1] = 255; dd[i + 2] = 255;
-      dd[i + 3] = Math.round(255 * ((1 - inf) + inf * lum));
+  if (p.mtMaskCv && op.maskSel > 0) fx14TrailGate(tg, W, H, p.mtMaskCv, op.maskSel);
+  const out = fx7NewCanvas(W, H), og = out.getContext('2d');
+  og.drawImage(trail, 0, 0);
+  og.drawImage(srcCanvas, 0, 0);
+  return out;
+}
+/* Motion Trail com pins: cada pin varre a imagem ao longo da sua Bézier —
+   a posição segue o caminho, a orientação local gira com a tangente, o
+   taper/compressão apertam até a ponta e a opacidade cai ao longo do
+   percurso. O original nítido fecha por cima, como no Trail simples. */
+function fx14MotionPins(srcCanvas, W, H, p, pins) {
+  const op = mtOpcoes(p);
+  const trail = fx7NewCanvas(W, H), tg = trail.getContext('2d');
+  for (const q of pins) {
+    const len = mtPinComprimento(q, W, H);
+    if (len < 2 || q.opacity <= 0) continue;
+    const N = mtPinPassos(len);
+    const p0 = mtBezier(q, 0, W, H), th0 = p0.ang;
+    const taper = q.taper / 100, compress = q.compress / 100, opac = q.opacity / 100;
+    for (let i = N; i >= 1; i--) {
+      const t = i / N, pos = mtBezier(q, t, W, H);
+      tg.save();
+      tg.globalAlpha = opac * Math.pow(1 - t, 1.3);
+      tg.translate(pos.x, pos.y);
+      tg.rotate(pos.ang); tg.scale(1 - taper * 0.45 * t, 1 - compress * 0.75 * t); tg.rotate(-th0);
+      tg.translate(-p0.x, -p0.y);
+      tg.drawImage(srcCanvas, 0, 0);
+      tg.restore();
     }
-    mg.putImageData(md, 0, 0);
-    tg.globalCompositeOperation = 'destination-in';
-    tg.drawImage(mc, 0, 0);
-    tg.globalCompositeOperation = 'source-over';
   }
+  tg.globalAlpha = 1;
+  if (p.mtMaskCv && op.maskSel > 0) fx14TrailGate(tg, W, H, p.mtMaskCv, op.maskSel);
   const out = fx7NewCanvas(W, H), og = out.getContext('2d');
   og.drawImage(trail, 0, 0);
   og.drawImage(srcCanvas, 0, 0);
@@ -15532,9 +15659,11 @@ function fx14BlurStudio(srcCanvas, W, H, params) {
   const p = { ...FX14_BLUR_DEFAULTS, ...(params || {}) };
   const mode = p.blurMode || 'box';
   if (mode === 'texture') return fx14Texture(srcCanvas, W, H, { amount: p.textureAmount, texture: p.texture, mix: p.mix });
-  if (mode === 'motion') return p.mtMode === 'trail'
-    ? fx14MotionTrail(srcCanvas, W, H, p)
-    : fx14Motion(srcCanvas, W, H, { amount: p.motionAmount, angle: p.motionAngle, samples: p.motionSamples });
+  if (mode === 'motion') {
+    if (p.mtMode !== 'trail') return fx14Motion(srcCanvas, W, H, { amount: p.motionAmount, angle: p.motionAngle, samples: p.motionSamples });
+    const mtPins = mtPinParse(p.mtPins);
+    return mtPins.length ? fx14MotionPins(srcCanvas, W, H, p, mtPins) : fx14MotionTrail(srcCanvas, W, H, p);
+  }
   if (mode === 'depth') return fx14Depth(srcCanvas, W, H, { map: p.depthMap, invert: p.invert, focus: p.depthFocus, range: p.depthRange, maxBlur: p.maxBlur, mix: p.mix });
   if (mode === 'dof') return fx14DOF(srcCanvas, W, H, { focusY: p.dofFocusY, range: p.dofRange, blur: p.dofBlur });
   if (mode === 'directional') return blurCentral(srcCanvas, W, H, { type: mode, angle: p.dirAngle, distance: p.dirDistance, samples: p.dirSamples });
@@ -28383,6 +28512,7 @@ function drawPreview(res, cheio) {          // 2.9.25: cheio = Output in full sc
     updateCloneOverlay(res);
     updateFillOverlay(res);
     updateFieldOverlay(res);
+    updateMotionOverlay(res);
     vandalUpdateOverlay(res);
   }
 }
@@ -30578,10 +30708,14 @@ const BLUR_MODOS = {
 function blurKeysVisiveis(params) {
   const vis = new Set(['blurMode']);
   for (const k of BLUR_MODOS[(params && params.blurMode) || 'box'] || BLUR_MODOS.box) vis.add(k);
-  /* 1.23.0: Motion Trail — os controles novos só aparecem nesse estilo */
+  /* 1.23.0: Motion Trail — os controles novos só aparecem nesse estilo.
+     1.24.0: com pins criados, os ajustes do pin selecionado aparecem. */
   if (params && params.blurMode === 'motion') {
     vis.add('mtMode');
-    if (params.mtMode === 'trail') for (const k of ['mtScaling', 'mtTaper', 'mtCompress', 'mtCurve', 'mtOpacity', 'mtMask']) vis.add(k);
+    if (params.mtMode === 'trail') {
+      for (const k of ['mtScaling', 'mtTaper', 'mtCompress', 'mtCurve', 'mtOpacity', 'mtMask', 'mtPinsView']) vis.add(k);
+      if (mtPinParse(params.mtPins).length) for (const k of ['mtPinTaper', 'mtPinCompress', 'mtPinOpacity']) vis.add(k);
+    }
   }
   return vis;
 }
@@ -30782,6 +30916,7 @@ function setParam(n, p, v) {
   }
   if (n.params[p.key] === v) return;
   n.params[p.key] = v;
+  if (n.type === 'blurStudio' && (p.key === 'mtPinTaper' || p.key === 'mtPinCompress' || p.key === 'mtPinOpacity')) mtPinSliderChanged(n);
   if (n.type === 'patternGen') patternSyncScale(n, p.key);
   if (n.type === 'bandMachine' && p.key === 'stops' && n.el) bandAplicaVis(n.el, n.params);
   markDirty(n.id);
@@ -30915,7 +31050,7 @@ function makeEnum(n, p) {
     if (n.type === 'gradientMap' && n.ui.gpins && (p.key === 'meshWarp' || /^color[1-8]$/.test(p.key))) n.ui.gpins();
     if (n.type === 'perspectiveWarp' && p.key === 'slot') perspTrocSlot(n);
     if (n.type === 'perspectiveWarp' && n.ui.pviewAgenda) n.ui.pviewAgenda();
-    if (n.type === 'blurStudio' && p.key === 'blurMode' && n.el) blurAplicaVis(n.el, n.params);
+    if (n.type === 'blurStudio' && (p.key === 'blurMode' || p.key === 'mtMode') && n.el) blurAplicaVis(n.el, n.params);
     if (n.type === 'blurStudio' && p.key === 'blurMode') fbOnModeChange(n);
     if (n.type === 'glowEffect' && p.key === 'style' && n.el) glowAplicaVis(n.el, n.params);
     if ((n.type === 'pixelSort' || n.type === 'sortedEffect') && n.el) psAplicaVis(n.el, n.params);
@@ -30924,7 +31059,7 @@ function makeEnum(n, p) {
     requestRender();
     commit();
   });
-  n.ui[p.key] = () => { sel.value = String(n.params[p.key]); if ((n.type === 'pixelSort' || n.type === 'sortedEffect') && n.el) psAplicaVis(n.el, n.params); if (n.type === 'glassStudio' && (p.key === 'glassMode' || p.key === 'glassScope') && n.el) glassAplicaVis(n.el, n.params, n); if (n.type === 'blurStudio' && p.key === 'blurMode' && n.el) blurAplicaVis(n.el, n.params); if (n.type === 'glowEffect' && p.key === 'style' && n.el) glowAplicaVis(n.el, n.params); if (n.type === 'worldEffect' && p.key === 'mode' && n.el) worldAplicaVis(n.el, n.params); if (n.type === 'halfmode' && n.el) halfModeAplicaVis(n.el, n.params); };
+  n.ui[p.key] = () => { sel.value = String(n.params[p.key]); if ((n.type === 'pixelSort' || n.type === 'sortedEffect') && n.el) psAplicaVis(n.el, n.params); if (n.type === 'glassStudio' && (p.key === 'glassMode' || p.key === 'glassScope') && n.el) glassAplicaVis(n.el, n.params, n); if (n.type === 'blurStudio' && (p.key === 'blurMode' || p.key === 'mtMode') && n.el) blurAplicaVis(n.el, n.params); if (n.type === 'glowEffect' && p.key === 'style' && n.el) glowAplicaVis(n.el, n.params); if (n.type === 'worldEffect' && p.key === 'mode' && n.el) worldAplicaVis(n.el, n.params); if (n.type === 'halfmode' && n.el) halfModeAplicaVis(n.el, n.params); };
   row.append(lb, sel);
   return row;
 }
@@ -37292,7 +37427,7 @@ window.addEventListener('keydown', e => {
   const typing = t && ((t.tagName === 'INPUT' && t.type !== 'color') || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA');
   if (e.key === 'Escape') { hideAddMenu(); return; }
   if (typing) return;
-  if ((e.key === 'Delete' || e.key === 'Backspace') && fbDeleteSelected()) { e.preventDefault(); return; }
+  if ((e.key === 'Delete' || e.key === 'Backspace') && (fbDeleteSelected() || mtDeleteSelected())) { e.preventDefault(); return; }
   const mod = e.ctrlKey || e.metaKey;
   const k = e.key.toLowerCase();
 
@@ -39016,6 +39151,213 @@ function updateFieldOverlay(res) {
   const pins = fbPins(pn);
   while (fbEls.length < pins.length) fbEls.push(fbMakePin());
   fbPlaceAll();
+}
+
+/* ---------- Motion Trail pins (Blur Studio · Motion): trajetórias Bézier ----------
+   Mesmo padrão dos pins do Field blur: overlay DOM/SVG sobre o preview
+   (nunca entra na imagem exportada), dados em n.params.mtPins (JSON).
+   Clicar no vazio cria um pin (arrastar no vazio = pan), arrastar move
+   âncora/ponta/alças, Delete ou o × remove o pin selecionado. */
+var mtOv = null, mtCatch = null, mtSvg = null, mtEls = [], mtGeo = null, mtDrag = null, mtSelNode = null, mtSel = -1;
+const mtIsMode = n => !!n && n.type === 'blurStudio' && n.params.blurMode === 'motion' && n.params.mtMode === 'trail' && n.params.mtPinsView !== 'hide';
+function mtStore(n, pins) {
+  const r2 = v => Math.round(v * 100) / 100;
+  n.params.mtPins = JSON.stringify(pins.map(q => ({ x: r2(q.x), y: r2(q.y), ex: r2(q.ex), ey: r2(q.ey), c1x: r2(q.c1x), c1y: r2(q.c1y), c2x: r2(q.c2x), c2y: r2(q.c2y), taper: Math.round(q.taper), compress: Math.round(q.compress), opacity: Math.round(q.opacity) })));
+}
+function mtEnsure() {
+  if (mtOv) return;
+  const par = glCanvas.parentElement;
+  if (getComputedStyle(par).position === 'static') par.style.position = 'relative';
+  mtOv = E('div', 'mt-ov');
+  mtOv.style.cssText = 'position:absolute;inset:0;display:none;pointer-events:none;z-index:5';
+  mtCatch = E('div', 'mt-catch');
+  mtCatch.style.cssText = 'position:absolute;inset:0;pointer-events:auto;cursor:crosshair;touch-action:none';
+  mtCatch.title = 'Click to add a Motion Trail pin · drag to pan';
+  mtSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  mtSvg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible';
+  mtOv.append(mtCatch, mtSvg);
+  par.append(mtOv);
+  mtCatch.addEventListener('pointerdown', mtCatchDown);
+  mtCatch.addEventListener('pointermove', mtCatchMove);
+  mtCatch.addEventListener('pointerup', mtCatchUp);
+  mtCatch.addEventListener('pointercancel', mtCatchUp);
+  mtCatch.addEventListener('wheel', e => glCanvas.dispatchEvent(new WheelEvent('wheel', e)), { passive: true });
+}
+function mtPonto(e) { return [(e.clientX - mtGeo.ox) / mtGeo.dwc * 100, (e.clientY - mtGeo.oy) / mtGeo.dhc * 100]; }
+function mtSvgEl(tag, attrs) {
+  const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (const k in attrs) el.setAttribute(k, attrs[k]);
+  el.style.pointerEvents = 'auto';
+  return el;
+}
+function mtMakePin() {
+  const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  const path = mtSvgEl('path', { fill: 'none', 'stroke-width': 2 });
+  path.style.pointerEvents = 'none';
+  const l1 = mtSvgEl('line', { 'stroke-width': 1 }); l1.style.pointerEvents = 'none';
+  const l2 = mtSvgEl('line', { 'stroke-width': 1 }); l2.style.pointerEvents = 'none';
+  const c1 = mtSvgEl('circle', { r: 5, fill: '#ffd75e', stroke: '#000' });
+  const c2 = mtSvgEl('circle', { r: 5, fill: '#ffd75e', stroke: '#000' });
+  const end = mtSvgEl('circle', { r: 6, fill: '#7ec8ff', stroke: '#000' });
+  const anc = mtSvgEl('circle', { r: 7, fill: '#fff', stroke: '#000', 'stroke-width': 2 });
+  const num = mtSvgEl('text', { 'font-size': 11, fill: '#fff', stroke: '#000', 'stroke-width': 3, 'paint-order': 'stroke' });
+  num.style.pointerEvents = 'none';
+  const del = mtSvgEl('text', { 'font-size': 15, fill: '#ff8080', stroke: '#000', 'stroke-width': 3, 'paint-order': 'stroke', cursor: 'pointer' });
+  del.textContent = '×'; del.setAttribute('text-anchor', 'middle');
+  anc.setAttribute('cursor', 'move'); end.setAttribute('cursor', 'move');
+  c1.setAttribute('cursor', 'move'); c2.setAttribute('cursor', 'move');
+  anc.dataset.k = 'a'; end.dataset.k = 'e'; c1.dataset.k = 'c1'; c2.dataset.k = 'c2';
+  for (const el of [anc, end, c1, c2]) {
+    el.addEventListener('pointerdown', mtPinDown);
+    el.addEventListener('pointermove', mtPinMove);
+    el.addEventListener('pointerup', mtPinUp);
+    el.addEventListener('pointercancel', mtPinUp);
+  }
+  del.addEventListener('pointerdown', e => e.stopPropagation());
+  del.addEventListener('click', e => { e.stopPropagation(); mtSel = Number(g.dataset.idx); mtDeleteSelected(); });
+  g.append(path, l1, l2, c1, c2, end, anc, num, del);
+  mtSvg.append(g);
+  return { g, path, l1, l2, c1, c2, end, anc, num, del };
+}
+function mtTela(v, eixo) { return eixo === 'x' ? mtGeo.ox + v / 100 * mtGeo.dwc - mtGeo.par.left : mtGeo.oy + v / 100 * mtGeo.dhc - mtGeo.par.top; }
+function mtPlacePin(i, q, sel) {
+  const el = mtEls[i]; if (!el) return;
+  el.g.dataset.idx = i;
+  const ax = mtTela(q.x, 'x'), ay = mtTela(q.y, 'y'), ex = mtTela(q.ex, 'x'), ey = mtTela(q.ey, 'y');
+  const c1x = mtTela(q.c1x, 'x'), c1y = mtTela(q.c1y, 'y'), c2x = mtTela(q.c2x, 'x'), c2y = mtTela(q.c2y, 'y');
+  el.path.setAttribute('d', `M ${ax} ${ay} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${ex} ${ey}`);
+  el.path.setAttribute('stroke', sel ? 'var(--accent,#ff7a1a)' : 'rgba(255,255,255,.9)');
+  el.path.style.filter = 'drop-shadow(0 0 1px #000)';
+  el.l1.setAttribute('x1', ax); el.l1.setAttribute('y1', ay); el.l1.setAttribute('x2', c1x); el.l1.setAttribute('y2', c1y);
+  el.l2.setAttribute('x1', ex); el.l2.setAttribute('y1', ey); el.l2.setAttribute('x2', c2x); el.l2.setAttribute('y2', c2y);
+  for (const l of [el.l1, el.l2]) { l.setAttribute('stroke', 'rgba(255,215,94,.75)'); }
+  el.c1.setAttribute('cx', c1x); el.c1.setAttribute('cy', c1y);
+  el.c2.setAttribute('cx', c2x); el.c2.setAttribute('cy', c2y);
+  el.end.setAttribute('cx', ex); el.end.setAttribute('cy', ey);
+  el.anc.setAttribute('cx', ax); el.anc.setAttribute('cy', ay);
+  el.anc.setAttribute('fill', sel ? 'var(--accent,#ff7a1a)' : '#fff');
+  el.num.setAttribute('x', ax + 10); el.num.setAttribute('y', ay - 8);
+  el.num.textContent = String(i + 1);
+  el.del.setAttribute('x', ax + 14); el.del.setAttribute('y', ay + 22);
+  el.del.style.display = sel ? '' : 'none';
+  el.g.style.display = '';
+}
+function mtPlaceAll() {
+  if (!mtGeo) return;
+  const pn = nodes.get(mtGeo.node); if (!pn) return;
+  const pins = mtPinParse(pn.params.mtPins);
+  mtEls.forEach((el, i) => { el.g.style.display = i < pins.length ? '' : 'none'; });
+  pins.forEach((q, i) => mtPlacePin(i, q, mtSelNode === pn.id && mtSel === i));
+}
+function mtSelect(pn, i) {
+  mtSelNode = pn.id; mtSel = i;
+  const q = mtPinParse(pn.params.mtPins)[i];
+  if (q) {
+    pn.params.mtPinTaper = q.taper; pn.params.mtPinCompress = q.compress; pn.params.mtPinOpacity = q.opacity;
+    if (pn.ui) for (const k of ['mtPinTaper', 'mtPinCompress', 'mtPinOpacity']) if (pn.ui[k]) pn.ui[k]();
+  }
+  if (pn.el) blurAplicaVis(pn.el, pn.params);
+  mtPlaceAll();
+  requestRender();
+}
+function mtPinDown(e) {
+  if (!mtGeo || e.button !== 0) return;
+  const pn = nodes.get(mtGeo.node); if (!pn) return;
+  e.preventDefault(); e.stopPropagation();
+  const g = e.currentTarget.parentElement;
+  const i = Number(g.dataset.idx), k = e.currentTarget.dataset.k;
+  e.currentTarget.setPointerCapture(e.pointerId);
+  mtSelect(pn, i);
+  const q = mtPinParse(pn.params.mtPins)[i]; if (!q) return;
+  mtDrag = { kind: k, node: pn.id, i, p0: mtPonto(e), o: { ...q } };
+}
+function mtPinMove(e) {
+  if (!mtDrag || mtDrag.kind === 'pan') return;
+  const pn = nodes.get(mtDrag.node); if (!pn) return;
+  const pins = mtPinParse(pn.params.mtPins), q = pins[mtDrag.i]; if (!q) return;
+  const pt = mtPonto(e), o = mtDrag.o, dx = pt[0] - mtDrag.p0[0], dy = pt[1] - mtDrag.p0[1];
+  if (mtDrag.kind === 'a') {
+    const nx = clamp(o.x + dx, 0, 100), ny = clamp(o.y + dy, 0, 100), ddx = nx - o.x, ddy = ny - o.y;
+    q.x = nx; q.y = ny; q.ex = clamp(o.ex + ddx, -60, 160); q.ey = clamp(o.ey + ddy, -60, 160);
+    q.c1x = clamp(o.c1x + ddx, -60, 160); q.c1y = clamp(o.c1y + ddy, -60, 160); q.c2x = clamp(o.c2x + ddx, -60, 160); q.c2y = clamp(o.c2y + ddy, -60, 160);
+  } else if (mtDrag.kind === 'e') { q.ex = clamp(o.ex + dx, -60, 160); q.ey = clamp(o.ey + dy, -60, 160); }
+  else if (mtDrag.kind === 'c1') { q.c1x = clamp(o.c1x + dx, -60, 160); q.c1y = clamp(o.c1y + dy, -60, 160); }
+  else if (mtDrag.kind === 'c2') { q.c2x = clamp(o.c2x + dx, -60, 160); q.c2y = clamp(o.c2y + dy, -60, 160); }
+  mtStore(pn, pins); mtPlaceAll(); markDirty(pn.id); requestRender();
+}
+function mtPinUp() { if (!mtDrag || mtDrag.kind === 'pan') return; mtDrag = null; commit(); }
+function mtCatchDown(e) {
+  if (!mtGeo || e.button !== 0 || verSaidaOn) return;
+  e.currentTarget.setPointerCapture(e.pointerId);
+  mtDrag = { kind: 'pan', sx: e.clientX, sy: e.clientY, px: pv.panX, py: pv.panY, moved: false, pt: mtPonto(e) };
+}
+function mtCatchMove(e) {
+  if (!mtDrag || mtDrag.kind !== 'pan') return;
+  const dx = e.clientX - mtDrag.sx, dy = e.clientY - mtDrag.sy;
+  if (!mtDrag.moved && Math.hypot(dx, dy) < 4) return;
+  mtDrag.moved = true;
+  pv.panX = mtDrag.px + dx; pv.panY = mtDrag.py + dy;
+  requestRender();
+}
+function mtCatchUp() {
+  if (!mtDrag || mtDrag.kind !== 'pan') return;
+  const d = mtDrag; mtDrag = null;
+  if (!d.moved && mtGeo) mtAddPin(d.pt);
+}
+function mtAddPin(pt) {
+  const pn = nodes.get(mtGeo.node); if (!pn) return;
+  if (pt[0] < 0 || pt[0] > 100 || pt[1] < 0 || pt[1] > 100) return;
+  const pins = mtPinParse(pn.params.mtPins);
+  if (pins.length >= MT_MAX_PINS) { toast('Motion Trail supports up to ' + MT_MAX_PINS + ' pins', true); return; }
+  const op = mtOpcoes(pn.params);
+  const lenPx = mtComprimento(pn.params.motionAmount, op.scaling, mtGeo.resW || 100, mtGeo.resH || 100);
+  const distPct = Math.min(60, Math.max(5, lenPx / Math.max(1, mtGeo.resW || 100) * 100));
+  pins.push(mtPinNovo(pt[0], pt[1], op.angleRad, distPct, { taper: pn.params.mtTaper, compress: pn.params.mtCompress, opacity: pn.params.mtOpacity }));
+  mtStore(pn, pins);
+  mtSelect(pn, pins.length - 1);
+  markDirty(pn.id); requestRender(); commit();
+}
+function mtDeleteSelected() {
+  const pn = mtSelNode != null ? nodes.get(mtSelNode) : null;
+  if (!pn || pn.type !== 'blurStudio' || mtSel < 0) return false;
+  const pins = mtPinParse(pn.params.mtPins);
+  if (!pins[mtSel]) return false;
+  pins.splice(mtSel, 1);
+  mtStore(pn, pins);
+  mtSel = -1; mtSelNode = null;
+  if (pn.el) blurAplicaVis(pn.el, pn.params);
+  mtPlaceAll();
+  markDirty(pn.id); requestRender(); commit();
+  return true;
+}
+function mtPinSliderChanged(n) {
+  if (!n || n.type !== 'blurStudio') return;
+  if (mtSelNode !== n.id || mtSel < 0) { mtSelNode = n.id; mtSel = 0; }
+  const pins = mtPinParse(n.params.mtPins);
+  if (!pins[mtSel]) return;
+  pins[mtSel].taper = clamp(+n.params.mtPinTaper || 0, 0, 100);
+  pins[mtSel].compress = clamp(+n.params.mtPinCompress || 0, 0, 100);
+  pins[mtSel].opacity = clamp(+n.params.mtPinOpacity || 0, 0, 100);
+  mtStore(n, pins);
+}
+function updateMotionOverlay(res) {
+  const pn = previewNode();
+  const show = mtIsMode(pn) && res;
+  if (!show) {
+    if (mtOv) mtOv.style.display = 'none';
+    if (mtSelNode != null && (!pn || pn.id !== mtSelNode)) { mtSel = -1; mtSelNode = null; }
+    return;
+  }
+  mtEnsure();
+  mtOv.style.display = '';
+  const cv = glCanvas.getBoundingClientRect(), par = glCanvas.parentElement.getBoundingClientRect();
+  const s = Math.min(cv.width / res.w, cv.height / res.h) * pv.zoom;
+  const dwc = res.w * s, dhc = res.h * s;
+  const ox = cv.left + cv.width / 2 + pv.panX - dwc / 2, oy = cv.top + cv.height / 2 + pv.panY - dhc / 2;
+  mtGeo = { node: pn.id, ox, oy, dwc, dhc, s, par, resW: res.w, resH: res.h };
+  const pins = mtPinParse(pn.params.mtPins);
+  while (mtEls.length < pins.length) mtEls.push(mtMakePin());
+  mtPlaceAll();
 }
 
 /* ---------- Clone source: handle on the preview (blue dot = where the clone copies from) ---------- */

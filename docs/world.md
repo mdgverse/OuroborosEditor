@@ -57,6 +57,31 @@ Núcleo puro (`worldMascara`, `worldChromeCor`, `worldFbm`,
 `tests/world.test.mjs`. Saída composta como nos demais efeitos:
 máscara opcional (Mask Influence) e Mix com a fonte.
 
+### Chrome aprimorado (1.24.0)
+
+Referência adicional: "How To Make Black Chrome Text In Photoshop!"
+(transcrição obtida da página do vídeo; o arquivo não foi baixado) —
+bevel suave com **curva de contorno** moldando as bandas do reflexo,
+gradiente preto→branco como ambiente, realce nas bordas e brilho por
+cima. Novos controles do Chrome, todos com efeito real no cálculo de
+`worldChromeCor` e **neutros nos padrões** (projetos antigos renderizam
+idêntico):
+
+- **Reflection Intensity** (0–200%) e **Reflection Contrast** — o
+  contraste refaz as bandas do mapa de reflexão em torno do meio, como
+  a curva de contorno do bevel.
+- **Reflection Distortion** — deforma só a consulta ao ambiente (ruído
+  fbm), sem deformar a forma.
+- **Surface Distortion** — perturba as normais com fbm: superfície
+  orgânica/irregular, distinta da distorção do reflexo.
+- **Roughness** — borra mais o campo de altura e espalha o especular
+  (expoente menor + pico menor): metal fosco, não só "menos brilho".
+- **Highlight Focus** — expoente do especular (foco do realce).
+- **Metallic Tint** — tingue o reflexo pela cor da fonte (metais
+  coloridos); **Tint** (cor) multiplica o reflexo (chrome colorido,
+  realce continua branco); **Exposure** (−100..100) fecha a receita do
+  vídeo: Liquid Mono + Exposure negativa = black chrome.
+
 ## Desempenho
 
 - Campos de Chrome/Flame calculados em grade de até 1024 px e

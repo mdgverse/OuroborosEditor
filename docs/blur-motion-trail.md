@@ -79,6 +79,37 @@ original nítido por cima — sem dependências, no pipeline atual.
   sem `runtime`). Dentro da pilha a máscara fica desligada e o Trail
   funciona sem ela.
 
+## Pins com trajetórias Bézier (1.24.0)
+
+Complemento sobre o mesmo modo Trail, inspirado no Path Blur do vídeo
+(o caminho define o movimento):
+
+- Cada **pin** é uma instância independente do Trail: âncora, ponta e
+  duas alças formando uma **Bézier cúbica** editável no Preview
+  (overlay SVG sobre o canvas, mesmo padrão dos pins do Field blur —
+  elementos DOM/SVG, nunca entram na imagem exportada).
+- Criar: clicar no vazio do preview (arrastar no vazio continua sendo
+  pan; a roda do mouse continua zoom). Arrastar move âncora (o caminho
+  inteiro acompanha), ponta ou alças. **Delete** ou o × remove o pin
+  selecionado. Até 12 pins. **Trail Pins: Hide on preview** oculta os
+  indicadores para ver o resultado limpo.
+- Dados em `n.params.mtPins` (JSON, parâmetro oculto): coordenadas em %
+  da imagem + `taper/compress/opacity` **por pin**, que nascem copiando
+  os globais. Selecionar um pin sincroniza os sliders **Pin Taper / Pin
+  Compress Sides / Pin Opacity** no corpo do nó; arrastá-los escreve só
+  naquele pin (`mtPinSliderChanged`, via `setParam`).
+- Processamento (`fx14MotionPins`): cada pin varre a imagem ao longo da
+  sua curva — posição segue o caminho, a orientação gira com a tangente
+  local, taper/compressão apertam até a ponta, opacidade cai ao longo
+  do percurso; o Mask Selection global limita o conjunto dos rastros e
+  o original nítido fecha por cima. **Sem pins, o Trail global de
+  sempre** (direção/comprimento globais) continua valendo.
+- Geometria pura (`mtPinParse/mtPinNovo/mtBezier/mtPinComprimento/
+  mtPinPassos`, no bloco `BLUR_TRAIL_PURO`) testada em
+  `tests/blur-pins.test.mjs` com trajetórias reta, C, S e acentuada.
+- Desempenho: ≤48 passos por pin, passos proporcionais ao comprimento
+  do caminho; o overlay só reconstrói atributos SVG dos pins visíveis.
+
 ## Limitações vs. referência
 
 - A trajetória é uma curva paramétrica única (Trail Curve), não um

@@ -64,7 +64,7 @@ const P = new Function(extrai('/* BLUR_TRAIL_PURO_INI */', '/* BLUR_TRAIL_PURO_F
 }
 
 /* ---------- visibilidade contextual ---------- */
-const visFn = new Function(extrai('const BLUR_MODOS = {', 'function blurAplicaVis') + '\nreturn blurKeysVisiveis;')();
+const visFn = new Function(extrai('/* BLUR_TRAIL_PURO_INI */', '/* BLUR_TRAIL_PURO_FIM */') + '\n' + extrai('const BLUR_MODOS = {', 'function blurAplicaVis') + '\nreturn blurKeysVisiveis;')();
 ok(visFn({ blurMode: 'motion' }).has('mtMode') && !visFn({ blurMode: 'motion' }).has('mtTaper'), 'Motion clássico: só o Motion Style aparece');
 {
   const v = visFn({ blurMode: 'motion', mtMode: 'trail' });
@@ -74,7 +74,7 @@ ok(visFn({ blurMode: 'motion' }).has('mtMode') && !visFn({ blurMode: 'motion' })
 ok(!visFn({ blurMode: 'box', mtMode: 'trail' }).has('mtMode') && visFn({ blurMode: 'spin' }).has('spinSpeed'), 'outros modos não ganham nem perdem controles');
 
 /* ---------- fiação e preservação ---------- */
-ok(html.includes("if (mode === 'motion') return p.mtMode === 'trail'"), 'fx14BlurStudio: Trail é opt-in; sem ele, cai no fx14Motion de sempre');
+ok(html.includes("if (p.mtMode !== 'trail') return fx14Motion("), 'fx14BlurStudio: Trail é opt-in; sem ele, cai no fx14Motion de sempre');
 ok(/fx14Motion\(srcCanvas, W, H, \{ amount: p\.motionAmount, angle: p\.motionAngle, samples: p\.motionSamples \}\)/.test(html), 'caminho clássico do Motion byte-idêntico');
 ok(/blurStudio: \(n, \[a, b\]\)/.test(html) && html.includes("pp.mtMode === 'trail' ? { ...pp, mtMaskCv: fx7SrcCanvas(b) } : pp"),
   'RUN passa a máscara só para o Motion Trail (demais modos intocados)');
