@@ -49,6 +49,39 @@ e a visibilidade contextual dos parâmetros (mesmo padrão do Glow).
   sobe do contorno superior da forma (direções Up/Down/Left/Right),
   altura/turbulência controláveis, rampas de cor Natural/Blue/Green/
   Violet e Placement sobre/atrás da camada.
+
+### Flame aprimorado (1.25.0)
+
+Referências: três Shorts de fogo sobre texto no Photoshop ("Dynamic
+Fire Text Effect", "Flame effect in photoshop", "The Fastest Way To
+Make Incredible Flame Effect") — só metadados/títulos foram acessíveis
+(Shorts sem transcrição nesta rota; download bloqueado, sem contornar
+proteções). O denominador comum — labaredas subindo das bordas do
+texto, núcleo claro de alta luminosidade, pontas irregulares e
+turbulentas — orientou os controles novos, todos reais no campo
+`worldChamaIntens` e **neutros nos padrões**:
+
+- **Forma**: Flame Width (frequência lateral das labaredas, sem mexer
+  na altura), Flame Density (portão sobre o ruído: chamas separadas),
+  Flame Spread (contorno emprestado às colunas vizinhas — o fogo vaza
+  para as laterais), Flame Variation (variância das alturas) e Edge
+  Distortion (pontas irregulares via fbm de alta frequência).
+- **Movimento**: Animation Speed e Oscillation leem o tempo da
+  **timeline do editor** (`TL.frame`) — a amostragem avança no domínio
+  do ruído (o campo sobe e balança; não é textura deslizando), com
+  opt-in de reavaliação por frame em `tlApplyFrame` (mesmo precedente
+  do ASCII). Play, scrub e export de vídeo veem o mesmo movimento;
+  Speed 0 = chama estática de sempre.
+- **Intensidade/cor**: Intensity (alfa), Brightness (cor), Contrast,
+  Core Intensity (reforço cúbico do núcleo), Color Gradient (expoente
+  da rampa) e Glow (halo com o blur já existente no editor, composto
+  sob a chama — não é exposição global).
+- **Detalhe**: Detail muda as oitavas do fbm (2–4; 50 = as 3 originais).
+
+Limitação: a animação é dirigida pela timeline (não há relógio de
+parede independente), seguindo a convenção dos demais efeitos
+animados do editor; partículas/fagulhas individuais não foram
+adicionadas — o fogo é um campo contínuo.
 - **Drip**: contorno inferior por coluna + gotas determinísticas
   (comprimento/largura/densidade) pintadas com a cor da fonte na borda.
 
