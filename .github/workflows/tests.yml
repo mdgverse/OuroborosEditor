@@ -125,6 +125,8 @@ jobs:
         run: node tests/blur-motion.test.mjs
       - name: Colar imagem cai na Layer 1 livre (não força Layer 2)
         run: node tests/paste-layer.test.mjs
+      - name: Motion Trail com pins Bézier no Preview
+        run: node tests/blur-pins.test.mjs
       - name: Versão (VERSION = index.html = APK)
         run: node tests/version.test.mjs
       - name: Higiene (código morto, CSS sem uso, reference/ fora)
