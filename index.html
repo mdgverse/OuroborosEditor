@@ -605,7 +605,7 @@ body.it-mode #tlPanel{display:none}
 
 /* Versão do editor — o arquivo VERSION na raiz é a fonte da verdade
    (o build do APK usa o mesmo número no versionName e falha se divergir). */
-const APP_VERSION = '1.23.0';
+const APP_VERSION = '1.23.1';
 /* tooltip do botão da marca: só o nome do produto (a versão é metadado, não entra na marca) */
 {
   const marca = document.getElementById('brandBtn');
@@ -26082,7 +26082,7 @@ async function vsColaNos(clip) {
 /* on HOME the image becomes a new document (same path as "Open file…") */
 async function vsColaImagem(file) {
   await vsSalvaProjetoAtual();
-  await ssOpenImageFile(file, { autoCamadas: true });   // 1.17.0: projeto novo já nasce organizado: Image → Layer Position (Layer 2) → Output
+  await ssOpenImageFile(file, { autoCamadas: true });   // 1.17.0: projeto novo já nasce organizado: Image → Layer Position (Layer 1) → Output
   setStatus('Image pasted' + ' — ' + 'new project created' + '.');
 }
 /* --- HOME decides --- */
@@ -38586,9 +38586,16 @@ async function ssOpenImageFile(f, opcoes = {}) {
   const a = createNode('image', 60, 140);
   const o = createNode('output', 600, 140);
   if (opcoes.autoCamadas) {
-    /* 1.17.0: primeira imagem colada num projeto novo já entra como camada */
+    /* 1.17.0: primeira imagem colada num projeto novo já entra como camada.
+       1.23.1: na Layer 1 — o projeto acabou de nascer vazio; a Layer 2 só
+       recebe imagem quando a Layer 1 já está ocupada (mesma regra do
+       itProximoSlotCamada usado no grafo aberto). */
     const lp = createNode('layers', 330, 140);
-    connect(a.id, lp.id, 1);      // Layer 2 (a Layer 1 é a base)
+    const idxLp = typeof itProximoSlotCamada === 'function'
+      ? itProximoSlotCamada(links.filter(l => l.to === lp.id).map(l => l.input), layerList(lp).length)
+      : 0;
+    while (layerList(lp).length <= idxLp) addLayer(lp);
+    connect(a.id, lp.id, idxLp);
     connect(lp.id, o.id, 0);
   } else {
     connect(a.id, o.id, 0);
@@ -42018,11 +42025,14 @@ function itCadeia(linkList, targetId, prefDe) {
   }
   return ordem;
 }
-/* Próxima entrada de camada livre a partir da Layer 2 (índice 1): a Layer 1
-   fica como base do Layer Position. Pode devolver >= total (expandir). */
+/* Próxima entrada de camada livre a partir da Layer 1 (índice 0): camada
+   ocupada é camada com LINK conectado — a simples existência do nó Layer
+   Position (ou de entradas vazias) não ocupa nada. A Layer 2+ só recebe
+   uma imagem nova quando todas as anteriores estão ocupadas. Pode
+   devolver >= total (expandir). */
 function itProximoSlotCamada(usados, total) {
   const s = new Set(usados || []);
-  let i = 1;
+  let i = 0;
   while (s.has(i)) i++;
   return i;
 }
@@ -42080,9 +42090,10 @@ function itLoad(data) {
 function itTitulo(n) { return n ? ((NODE_TYPES[n.type] || {}).title || n.type) : ''; }
 /* 1.17.0 — gerenciamento automático de camadas: uma imagem nova (colar/
    importar) entra sozinha no Layer Position do projeto — cria o nó se não
-   existir (e liga ao Output), reaproveita se existir, e ocupa a próxima
-   entrada livre a partir da Layer 2, sem tocar nas já ligadas. Tudo com
-   createNode/connect/addLayer reais; nada de sistema paralelo. */
+   existir (e liga ao Output), reaproveita se existir, e ocupa a primeira
+   entrada livre a partir da Layer 1 (correção 1.23.1: a Layer 2+ só recebe
+   imagem quando as anteriores estão ocupadas), sem tocar nas já ligadas.
+   Tudo com createNode/connect/addLayer reais; nada de sistema paralelo. */
 function itAutoLayerPosition(imgNode) {
   if (!imgNode || imgNode.type !== 'image') return null;
   if (links.some(l => l.from === imgNode.id)) return null;   // já encaminhada
@@ -42099,7 +42110,7 @@ function itAutoLayerPosition(imgNode) {
   let idx = itProximoSlotCamada(links.filter(l => l.to === lp.id).map(l => l.input), layerList(lp).length);
   while (layerList(lp).length <= idx) addLayer(lp);
   connect(imgNode.id, lp.id, idx);
-  imgNode.x = lp.x - 300; imgNode.y = lp.y + (idx - 1) * 180 - 90;
+  imgNode.x = lp.x - 300; imgNode.y = lp.y + idx * 180 - 90;
   if (imgNode.el) { imgNode.el.style.left = imgNode.x + 'px'; imgNode.el.style.top = imgNode.y + 'px'; }
   drawLinks(); markDirty(lp.id); commit(); requestRender();
   if (typeof itFlowRender === 'function' && document.body.classList.contains('it-mode')) itFlowRender();
@@ -42596,7 +42607,7 @@ function itAjuda() {
     '<li><b>⏻ Bypass</b>: liga/desliga um efeito intermediário sem remover nó nem links. Em bypass, a avaliação devolve a entrada intacta (fluxo original); o botão também existe no cabeçalho do nó, nos dois ambientes, e o estado salva junto do projeto.</li>' +
     '<li><b>Excluir nó</b>: remove o nó reconectando entrada→saída, igual à exclusão do editor.</li>' +
     '<li><b>Todos os nós</b>: nós fora do fluxo principal; ⇥ insere um nó livre no meio do link do nó em foco/Output (mesma inserção de arrastar um nó sobre o fio).</li>' +
-    '<li><b>Camadas automáticas</b>: colar (Ctrl+V) ou importar uma imagem cria o Layer Position se ele não existir (ligado ao Output) e coloca a imagem na próxima entrada livre a partir da Layer 2 — sem sobrescrever as já ligadas. Se ele já existir, é reaproveitado.</li>' +
+    '<li><b>Camadas automáticas</b>: colar (Ctrl+V) ou importar uma imagem cria o Layer Position se ele não existir (ligado ao Output) e coloca a imagem na primeira entrada livre a partir da Layer 1 — a Layer 2 só recebe uma imagem nova quando a Layer 1 já está ocupada, sem sobrescrever as já ligadas. Se ele já existir, é reaproveitado.</li>' +
     '<li><b>Efeito numa camada só</b>: na seção Camadas, selecione a camada (Layer 2, 3…) e use <b>＋ Efeito na camada selecionada</b>: o efeito entra no link que alimenta só aquela camada; as outras não são tocadas. A cadeia da camada (fonte → efeitos) aparece com bypass ⏻ individual.</li>' +
     '<li><b>Conectar pela saída (●)</b>: clique no socket de saída de um nó (no painel de propriedades, no botão ● do fluxo ou de Todos os nós) e escolha o destino: <b>um nó que já existe</b> — qualquer um do projeto, mesmo fora do fluxo visível, como ligar no Mask (brush) — ou <b>um nó novo</b>, criado já conectado. O painel mostra entradas livres, ocupadas (substituir) e incompatíveis (Palette/Áudio/Imagem e loops são bloqueados). Esc cancela sem mudar nada; ao conectar, o link nasce no grafo de verdade.</li>' +
     '<li><b>Alternar modos</b> (topo) não recarrega nem converte nada: grafo, nós, parâmetros, bypass e resultados ficam como estão.</li></ul>' +
