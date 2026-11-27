@@ -105,6 +105,17 @@ a 1.26.0 entrega a lista completa, organizada em **grupos recolhíveis**
 antigos renderizam idêntico). Verificação individual de cada controle
 em `tests/world-chrome.test.mjs`.
 
+Organização (1.26.1): os cinco grupos seguem o padrão do nó **Sorted**
+— `SEC` com dica, **recolhidos por padrão**, estado de expansão
+persistido pelo `buildSection` compartilhado, na ordem Reflection,
+Metallic, Surface, Color, Bevel. A troca de efeito é contextual de
+verdade: corrigida a causa raiz de os controles não aparecerem — o
+handler de `change` dos selects não chamava `worldAplicaVis` (só a
+montagem do nó e o refresh programático chamavam); agora chama, como
+já fazia para o Glow. Grupos sem controles visíveis somem nos outros
+efeitos, e os valores de cada efeito ficam preservados nos params ao
+alternar (`tests/world-org.test.mjs`).
+
 - **Bevel**: Bevel Enabled (desliga = topo plano, borda dura), Bevel
   Amount (largura do campo — a chave `bevel` de sempre), Bevel Depth
   (força das normais), Bevel Segments (quantiza o chanfro em degraus;

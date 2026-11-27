@@ -605,7 +605,7 @@ body.it-mode #tlPanel{display:none}
 
 /* Versão do editor — o arquivo VERSION na raiz é a fonte da verdade
    (o build do APK usa o mesmo número no versionName e falha se divergir). */
-const APP_VERSION = '1.26.0';
+const APP_VERSION = '1.26.1';
 /* tooltip do botão da marca: só o nome do produto (a versão é metadado, não entra na marca) */
 {
   const marca = document.getElementById('brandBtn');
@@ -3079,26 +3079,26 @@ const NODE_TYPES = {
          Surface, Color. As chaves antigas (bevel, roundness, env, shine,
          cRefl…) foram mantidas; shine virou o Specular e cHighlight o
          Glossiness, com a mesma matemática nos padrões. */
-      SEC('secBevel', 'Bevel', 'Shape of the raised metal edge.'),
+      SEC('secRefl', 'Reflection', 'The environment reflected by the metal.', true),
+      ENUM('env', 'Reflection Map', [['sky', 'Sky & Clouds'], ['sunset', 'Sunset'], ['studio', 'Studio'], ['mono', 'Liquid Mono']], 'sky'),
+      NUM('cRefl', 'Reflection Intensity', 0, 200, 100), NUM('cContrast', 'Reflection Contrast', 0, 100, 50),
+      NUM('cReflBlur', 'Reflection Blur', 0, 100, 0), NUM('cDistort', 'Reflection Distortion', 0, 100, 0),
+      SEC('secMetal', 'Metallic', 'How metal the surface behaves.', true),
+      NUM('cMetalI', 'Metallic Intensity', 0, 100, 100), NUM('cMetal', 'Metallic Tint', 0, 100, 0),
+      NUM('cRough', 'Roughness', 0, 100, 0), NUM('cHighlight', 'Glossiness', 0, 100, 50),
+      NUM('shine', 'Specular', 0, 100, 60),
+      SEC('secSurf', 'Surface', 'Irregularities of the metal surface itself.', true),
+      NUM('cSurf', 'Surface Distortion', 0, 100, 0), NUM('cWave', 'Wave', 0, 100, 0),
+      NUM('cNoise', 'Noise', 0, 100, 0), NUM('cDetail', 'Detail', 0, 100, 50),
+      SEC('secColor', 'Color', 'Final color of the chrome.', true),
+      COL('cBase', 'Base Color', '#000000'), COL('cTint', 'Tint', '#ffffff'),
+      NUM('cExpo', 'Exposure', -100, 100, 0), NUM('cHi', 'Highlight', 0, 100, 50),
+      SEC('secBevel', 'Bevel', 'Shape of the raised metal edge.', true),
       ENUM('bevelOn', 'Bevel Enabled', [['on', 'On'], ['off', 'Off']], 'on'),
       NUM('bevel', 'Bevel Amount', 0, 100, 45), NUM('cBevelDepth', 'Bevel Depth', 0, 100, 50),
       NUM('cBevelSeg', 'Bevel Segments', 2, 16, 16), NUM('cBevelProfile', 'Bevel Profile', 0, 100, 50),
       NUM('cBevelSmooth', 'Bevel Smoothness', 0, 100, 0), NUM('cBevelDir', 'Bevel Direction', -180, 180, 0),
       NUM('roundness', 'Corner Roundness', 0, 100, 35),
-      SEC('secRefl', 'Reflection', 'The environment reflected by the metal.'),
-      ENUM('env', 'Reflection Map', [['sky', 'Sky & Clouds'], ['sunset', 'Sunset'], ['studio', 'Studio'], ['mono', 'Liquid Mono']], 'sky'),
-      NUM('cRefl', 'Reflection Intensity', 0, 200, 100), NUM('cContrast', 'Reflection Contrast', 0, 100, 50),
-      NUM('cReflBlur', 'Reflection Blur', 0, 100, 0), NUM('cDistort', 'Reflection Distortion', 0, 100, 0),
-      SEC('secMetal', 'Metallic', 'How metal the surface behaves.'),
-      NUM('cMetalI', 'Metallic Intensity', 0, 100, 100), NUM('cMetal', 'Metallic Tint', 0, 100, 0),
-      NUM('cRough', 'Roughness', 0, 100, 0), NUM('cHighlight', 'Glossiness', 0, 100, 50),
-      NUM('shine', 'Specular', 0, 100, 60),
-      SEC('secSurf', 'Surface', 'Irregularities of the metal surface itself.'),
-      NUM('cSurf', 'Surface Distortion', 0, 100, 0), NUM('cWave', 'Wave', 0, 100, 0),
-      NUM('cNoise', 'Noise', 0, 100, 0), NUM('cDetail', 'Detail', 0, 100, 50),
-      SEC('secColor', 'Color', 'Final color of the chrome.'),
-      COL('cBase', 'Base Color', '#000000'), COL('cTint', 'Tint', '#ffffff'),
-      NUM('cExpo', 'Exposure', -100, 100, 0), NUM('cHi', 'Highlight', 0, 100, 50),
     ],
   },
   magicGen: {
@@ -31230,6 +31230,7 @@ function makeEnum(n, p) {
     if (n.type === 'blurStudio' && (p.key === 'blurMode' || p.key === 'mtMode') && n.el) blurAplicaVis(n.el, n.params);
     if (n.type === 'blurStudio' && p.key === 'blurMode') fbOnModeChange(n);
     if (n.type === 'glowEffect' && p.key === 'style' && n.el) glowAplicaVis(n.el, n.params);
+    if (n.type === 'worldEffect' && p.key === 'mode' && n.el) worldAplicaVis(n.el, n.params);
     if ((n.type === 'pixelSort' || n.type === 'sortedEffect') && n.el) psAplicaVis(n.el, n.params);
     if (n.type === 'blurStudio' && p.key === 'fieldRadius') fbSliderChanged(n);
     markDirty(n.id);

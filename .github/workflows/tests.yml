@@ -131,6 +131,8 @@ jobs:
         run: node tests/world-flame.test.mjs
       - name: World · Chrome completo (grupos Bevel/Reflection/Metallic/Surface/Color)
         run: node tests/world-chrome.test.mjs
+      - name: World · organização dos grupos (padrão Sorted) e contexto por efeito
+        run: node tests/world-org.test.mjs
       - name: Versão (VERSION = index.html = APK)
         run: node tests/version.test.mjs
       - name: Higiene (código morto, CSS sem uso, reference/ fora)
