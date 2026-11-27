@@ -124,21 +124,21 @@ return { nodes, createNode, connect, linkTo, evalNode, removeNode, insertNodeInL
   const out = B.createNode('output', 600, 140);
   const img1 = B.createNode('image', 60, 140);
   const r1 = B.itAutoLayerPosition(img1);
-  ok(r1 && r1.idx === 1, 'primeira imagem colada → Layer 2 (índice 1)', r1);
+  ok(r1 && r1.idx === 0, 'primeira imagem colada → Layer 1 (índice 0)', r1);
   const lp = r1.lp;
   ok(B.linkTo(out.id, 0) && B.linkTo(out.id, 0).from === lp.id, 'Layer Position criado já ligado ao Output');
   ok(B.evalNode(out.id) === 'img' + img1.id, 'fluxo avalia: imagem → Layer Position → Output');
 
   const img2 = B.createNode('image'), img3 = B.createNode('image'), img4 = B.createNode('image');
-  ok(B.itAutoLayerPosition(img2).idx === 2, 'segunda imagem → Layer 3');
-  ok(B.itAutoLayerPosition(img3).idx === 3, 'terceira imagem → Layer 4');
-  ok(B.itAutoLayerPosition(img4).idx === 4, 'quarta imagem → Layer 5');
+  ok(B.itAutoLayerPosition(img2).idx === 1, 'segunda imagem (Layer 1 ocupada) → Layer 2');
+  ok(B.itAutoLayerPosition(img3).idx === 2, 'terceira imagem (Layers 1–2 ocupadas) → Layer 3');
+  ok(B.itAutoLayerPosition(img4).idx === 3, 'quarta imagem → Layer 4');
   ok([...B.nodes.values()].filter(n => n.type === 'layers').length === 1, 'Layer Position é reaproveitado (um só)');
   ok(B.evalNode(out.id) === ['img' + img1.id, 'img' + img2.id, 'img' + img3.id, 'img' + img4.id].join('+'), 'ordem de inserção preservada na composição');
 
-  /* efeito contextual: só na camada da img3 (Layer 4, input 3) */
+  /* efeito contextual: só na camada da img3 (Layer 3, input 2) */
   const fx = B.createNode('brightness'); fx.params.amount = 40;
-  B.insertNodeInLink(fx.id, B.linkTo(lp.id, 3));
+  B.insertNodeInLink(fx.id, B.linkTo(lp.id, 2));
   ok(B.evalNode(out.id) === ['img' + img1.id, 'img' + img2.id, 'img' + img3.id + '|blur40', 'img' + img4.id].join('+'), 'efeito entra só na camada escolhida; as outras intactas');
   fx.params.amount = 90; B.markDirty(fx.id);
   ok(B.evalNode(out.id).includes('img' + img3.id + '|blur90'), 'parâmetro do efeito da camada é editável e reflete');
@@ -146,15 +146,19 @@ return { nodes, createNode, connect, linkTo, evalNode, removeNode, insertNodeInL
   ok(B.evalNode(out.id) === ['img' + img1.id, 'img' + img2.id, 'img' + img3.id, 'img' + img4.id].join('+'), 'bypass desativa só o efeito daquela camada');
   fx.bypass = false; B.markDirty(fx.id);
   B.removeNode(fx.id);
-  ok(B.linkTo(lp.id, 3) && B.linkTo(lp.id, 3).from === img3.id, 'excluir o efeito reconecta a camada original');
+  ok(B.linkTo(lp.id, 2) && B.linkTo(lp.id, 2).from === img3.id, 'excluir o efeito reconecta a camada original');
   ok(B.evalNode(out.id) === ['img' + img1.id, 'img' + img2.id, 'img' + img3.id, 'img' + img4.id].join('+'), 'fluxo íntegro depois de excluir o efeito');
 
   /* expansão além das 6 entradas iniciais */
-  const img5 = B.createNode('image'), img6 = B.createNode('image');
-  ok(B.itAutoLayerPosition(img5).idx === 5, 'quinta imagem → Layer 6');
-  ok(B.itAutoLayerPosition(img6).idx === 6 && B.layerList(lp).length === 7, 'sétima entrada criada sob demanda (sem sobrescrever)');
-  ok(B.itProximoSlotCamada([1, 2, 4], 6) === 3, 'slot livre do meio é usado antes de expandir');
-  ok(B.linksDe().filter(l => l.to === lp.id).length === 6, 'nenhuma camada foi sobrescrita');
+  const img5 = B.createNode('image'), img6 = B.createNode('image'), img7 = B.createNode('image');
+  ok(B.itAutoLayerPosition(img5).idx === 4, 'quinta imagem → Layer 5');
+  ok(B.itAutoLayerPosition(img6).idx === 5, 'sexta imagem → Layer 6');
+  ok(B.itAutoLayerPosition(img7).idx === 6 && B.layerList(lp).length === 7, 'sétima entrada criada sob demanda (sem sobrescrever)');
+  ok(B.itProximoSlotCamada([], 6) === 0, 'Layer Position existe mas vazio → Layer 1 (existir não é estar ocupada)');
+  ok(B.itProximoSlotCamada([0], 6) === 1, 'só a Layer 1 ocupada → Layer 2');
+  ok(B.itProximoSlotCamada([0, 1], 6) === 2, 'Layers 1–2 ocupadas → Layer 3');
+  ok(B.itProximoSlotCamada([0, 1, 3], 6) === 2, 'slot livre do meio é usado antes de expandir');
+  ok(B.linksDe().filter(l => l.to === lp.id).length === 7, 'nenhuma camada foi sobrescrita');
 }
 
 /* ---------- 6c. conexão interativa pela saída (funções reais) ---------- */
@@ -257,7 +261,7 @@ return { nodes, createNode, connect, linkTo, evalNode, itSocketTipo, itIndicesCo
   ok(html.includes("localStorage.setItem('ouroboros:ui-mode'"), 'preferência de modo continua fora dos dados do projeto');
   /* 1.17.0: camadas automáticas + contexto */
   ok(html.includes('function itAutoLayerPosition(imgNode)'), 'organizador automático de camadas existe');
-  ok(html.includes("connect(a.id, lp.id, 1)") && html.includes('autoCamadas: true'), 'projeto novo ao colar: Image → Layer 2 → Output');
+  ok(html.includes('connect(a.id, lp.id, idxLp);') && html.includes('autoCamadas: true'), 'projeto novo ao colar: Image → Layer Position (Layer 1) → Output');
   ok(html.includes('if (criado && typeof itAutoLayerPosition') && html.includes('if (criadoImp && typeof itAutoLayerPosition'), 'colar/importar com projeto aberto organizam (sem tocar em substituição de imagem)');
   ok(html.includes('id="itLayersCtx"') && html.includes('id="itFxLayer"'), 'seção de camadas contextuais na interface');
   ok(html.includes('function itLayersRender()') && html.includes('layerRotulo(lp, i)'), 'lista usa os rótulos reais do Layer Position');
