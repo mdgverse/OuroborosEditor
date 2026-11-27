@@ -605,7 +605,7 @@ body.it-mode #tlPanel{display:none}
 
 /* Versão do editor — o arquivo VERSION na raiz é a fonte da verdade
    (o build do APK usa o mesmo número no versionName e falha se divergir). */
-const APP_VERSION = '1.22.0';
+const APP_VERSION = '1.23.0';
 /* tooltip do botão da marca: só o nome do produto (a versão é metadado, não entra na marca) */
 {
   const marca = document.getElementById('brandBtn');
@@ -3895,7 +3895,7 @@ const NODE_TYPES = {
     ],
   },
   blurStudio: {
-    title: 'Blur Studio', cat: 'filter', inputs: ['Image'],
+    title: 'Blur Studio', cat: 'filter', inputs: ['Image', 'Mask'],
     params: [
       ENUM('blurMode', 'Type', [['gaussian', 'Gaussian'], ['box', 'Box'], ['motion', 'Motion'], ['radial', 'Radial / Zoom'], ['spin', 'Spin / Rotational'], ['lens', 'Lens / Bokeh'], ['surface', 'Surface / Smart'], ['directional', 'Directional'], ['texture', 'Textured blur'], ['depth', 'Depth blur'], ['dof', 'Depth of field'], ['focusFrame', 'Field blur (multi-pin)']], 'box'),
       NUM('bsAmount', 'Amount / Radius', 0, 100, 40), NUM('bsAngle', 'Angle / Direction', -180, 180, 0, 0.5),
@@ -3919,6 +3919,11 @@ const NODE_TYPES = {
       NUM('textureAmount', 'Blur amount (texture)', 0, 32, 8), NUM('texture', 'Grain (texture)', 0, 80, 20),
       NUM('motionAmount', 'Motion distance', 0, 120, 24), NUM('motionAngle', 'Motion angle', 0, 360, 0),
       NUM('motionSamples', 'Motion samples', 2, 32, 12),
+      ENUM('mtMode', 'Motion Style', [['blur', 'Classic motion blur'], ['trail', 'Motion Trail']], 'blur'),
+      ENUM('mtScaling', 'Scaling Mode', [['fixed', 'Fixed'], ['adaptive', 'Adaptive']], 'fixed'),
+      NUM('mtTaper', 'Trail Taper', 0, 100, 55), NUM('mtCompress', 'Compress Sides', 0, 100, 25),
+      NUM('mtCurve', 'Trail Curve', -100, 100, 0), NUM('mtOpacity', 'Trail Opacity', 0, 100, 85),
+      NUM('mtMask', 'Mask Selection', 0, 100, 100),
       ENUM('depthMap', 'Depth map', [['luma', 'Luminance'], ['vertical', 'Vertical']], 'luma'),
       ENUM('invert', 'Invert depth', [['no', 'Normal'], ['yes', 'Invert']], 'no'),
       NUM('depthFocus', 'Focus depth', 0, 100, 50), NUM('depthRange', 'Focus range', 1, 100, 28),
@@ -15153,7 +15158,7 @@ function fx13Glass(srcCanvas, W, H, params) {
 }
 
 /* fx14 */
-const FX14_BLUR_DEFAULTS = { blurMode: 'box', bsAmount: 40, bsAngle: 0, bsCenterX: 50, bsCenterY: 50, bsQuality: 'medium', bsPreserveEdges: 'on', dirAngle: 0, dirDistance: 20, dirSamples: 12, radAmount: 30, radCenterX: 50, radCenterY: 50, spinCenterX: 50, spinCenterY: 45, spinSpeed: 18, spinRadius: 28, spinFalloff: 22, spinCount: 24, spinDir: '1', spinIntensity: 100, lensRadius: 6, bokehRadius: 4, radius: 8, passes: 2, mix: 100, textureAmount: 8, texture: 20, motionAmount: 24, motionAngle: 0, motionSamples: 12, depthMap: 'luma', invert: 'no', depthFocus: 50, depthRange: 28, maxBlur: 18, dofFocusY: 50, dofRange: 28, dofBlur: 12, focusX: 50, focusY: 50, focusRadius: 34, focusBlur: 10, focusVignette: 45, focusShape: 'circle' };
+const FX14_BLUR_DEFAULTS = { blurMode: 'box', bsAmount: 40, bsAngle: 0, bsCenterX: 50, bsCenterY: 50, bsQuality: 'medium', bsPreserveEdges: 'on', dirAngle: 0, dirDistance: 20, dirSamples: 12, radAmount: 30, radCenterX: 50, radCenterY: 50, spinCenterX: 50, spinCenterY: 45, spinSpeed: 18, spinRadius: 28, spinFalloff: 22, spinCount: 24, spinDir: '1', spinIntensity: 100, lensRadius: 6, bokehRadius: 4, radius: 8, passes: 2, mix: 100, textureAmount: 8, texture: 20, motionAmount: 24, motionAngle: 0, motionSamples: 12, mtMode: 'blur', mtScaling: 'fixed', mtTaper: 55, mtCompress: 25, mtCurve: 0, mtOpacity: 85, mtMask: 100, depthMap: 'luma', invert: 'no', depthFocus: 50, depthRange: 28, maxBlur: 18, dofFocusY: 50, dofRange: 28, dofBlur: 12, focusX: 50, focusY: 50, focusRadius: 34, focusBlur: 10, focusVignette: 45, focusShape: 'circle' };
 // ===== v14: Blur Studio (fxBlurStudio from v1.6) =====
 function fx14Copy(srcCanvas, W, H) {
   const cv = fx7NewCanvas(W, H);
@@ -15237,6 +15242,90 @@ function fx14Texture(srcCanvas, W, H, p) {
   }
   ctx.putImageData(img, 0, 0);
   return cv;
+}
+/* BLUR_TRAIL_PURO_INI */
+/* Motion Trail (1.23.0): geometria pura do rastro unilateral do modo
+   Motion — direção, comprimento (Fixed px / Adaptive %), afunilamento,
+   compressão lateral, curvatura e falloff de opacidade por passo.
+   Sem DOM: tests/blur-motion.test.mjs. Análise em docs/blur-motion-trail.md. */
+function mtOpcoes(p) {
+  p = p || {};
+  const num = (k, d) => { const v = Number(p[k]); return isFinite(v) ? v : d; };
+  const cl = (v, a, b) => Math.min(b, Math.max(a, v));
+  return {
+    scaling: p.mtScaling === 'adaptive' ? 'adaptive' : 'fixed',
+    angleRad: num('motionAngle', 0) * Math.PI / 180,
+    taper: cl(num('mtTaper', 55), 0, 100) / 100,
+    compress: cl(num('mtCompress', 25), 0, 100) / 100,
+    curve: cl(num('mtCurve', 0), -100, 100) / 100,
+    opacity: cl(num('mtOpacity', 85), 0, 100) / 100,
+    maskSel: cl(num('mtMask', 100), 0, 100) / 100,
+    samples: Math.round(cl(num('motionSamples', 12), 2, 32)),
+  };
+}
+/* Fixed: px como hoje. Adaptive: % do menor lado (o "Length (%)" da referência). */
+function mtComprimento(amount, scaling, W, H) {
+  const a = Math.max(0, Number(amount) || 0);
+  return scaling === 'adaptive' ? a / 100 * Math.min(W, H) : a;
+}
+/* Passos da varredura: o pedido do usuário, elevado o bastante para o
+   rastro não serrilhar, com teto para não pesar. */
+function mtPassos(len, samples) {
+  const base = Math.max(2, Math.min(32, Math.round(Number(samples) || 12)));
+  return Math.max(2, Math.min(64, Math.max(base, Math.ceil(Math.max(0, len) / 8))));
+}
+/* Transformada do passo t (0 = colado na forma, 1 = ponta do rastro). */
+function mtTransforme(t, op, len) {
+  const tt = Math.min(1, Math.max(0, t));
+  const along = len * tt;
+  const bend = op.curve * len * 0.35 * tt * tt;
+  const cos = Math.cos(op.angleRad), sin = Math.sin(op.angleRad);
+  return {
+    dx: cos * along - sin * bend,
+    dy: sin * along + cos * bend,
+    sAlong: 1 - op.taper * 0.45 * tt,
+    sLat: 1 - op.compress * 0.75 * tt,
+    alpha: op.opacity * Math.pow(1 - tt, 1.3),
+  };
+}
+/* BLUR_TRAIL_PURO_FIM */
+/* Motion Trail: varredura unilateral (o original nítido vai por cima);
+   a máscara, quando ligada, limita só o rastro — nunca o sujeito. */
+function fx14MotionTrail(srcCanvas, W, H, p) {
+  const op = mtOpcoes(p);
+  const len = mtComprimento(p.motionAmount, op.scaling, W, H);
+  if (len < 0.5 || op.opacity <= 0) return fx14Copy(srcCanvas, W, H);
+  const trail = fx7NewCanvas(W, H), tg = trail.getContext('2d');
+  const N = mtPassos(len, op.samples), cx = W / 2, cy = H / 2;
+  for (let i = N; i >= 1; i--) {
+    const tr = mtTransforme(i / N, op, len);
+    tg.save();
+    tg.globalAlpha = tr.alpha;
+    tg.translate(cx + tr.dx, cy + tr.dy);
+    tg.rotate(op.angleRad); tg.scale(tr.sAlong, tr.sLat); tg.rotate(-op.angleRad);
+    tg.translate(-cx, -cy);
+    tg.drawImage(srcCanvas, 0, 0);
+    tg.restore();
+  }
+  tg.globalAlpha = 1;
+  if (p.mtMaskCv && op.maskSel > 0) {
+    const mc = fx7NewCanvas(W, H), mg = mc.getContext('2d', { willReadFrequently: true });
+    mg.drawImage(p.mtMaskCv, 0, 0, W, H);
+    const md = mg.getImageData(0, 0, W, H), dd = md.data, inf = op.maskSel;
+    for (let i = 0; i < dd.length; i += 4) {
+      const lum = (0.2126 * dd[i] + 0.7152 * dd[i + 1] + 0.0722 * dd[i + 2]) / 255;
+      dd[i] = 255; dd[i + 1] = 255; dd[i + 2] = 255;
+      dd[i + 3] = Math.round(255 * ((1 - inf) + inf * lum));
+    }
+    mg.putImageData(md, 0, 0);
+    tg.globalCompositeOperation = 'destination-in';
+    tg.drawImage(mc, 0, 0);
+    tg.globalCompositeOperation = 'source-over';
+  }
+  const out = fx7NewCanvas(W, H), og = out.getContext('2d');
+  og.drawImage(trail, 0, 0);
+  og.drawImage(srcCanvas, 0, 0);
+  return out;
 }
 // Motion blur (fxMotionBlur)
 function fx14Motion(srcCanvas, W, H, p) {
@@ -15443,7 +15532,9 @@ function fx14BlurStudio(srcCanvas, W, H, params) {
   const p = { ...FX14_BLUR_DEFAULTS, ...(params || {}) };
   const mode = p.blurMode || 'box';
   if (mode === 'texture') return fx14Texture(srcCanvas, W, H, { amount: p.textureAmount, texture: p.texture, mix: p.mix });
-  if (mode === 'motion') return fx14Motion(srcCanvas, W, H, { amount: p.motionAmount, angle: p.motionAngle, samples: p.motionSamples });
+  if (mode === 'motion') return p.mtMode === 'trail'
+    ? fx14MotionTrail(srcCanvas, W, H, p)
+    : fx14Motion(srcCanvas, W, H, { amount: p.motionAmount, angle: p.motionAngle, samples: p.motionSamples });
   if (mode === 'depth') return fx14Depth(srcCanvas, W, H, { map: p.depthMap, invert: p.invert, focus: p.depthFocus, range: p.depthRange, maxBlur: p.maxBlur, mix: p.mix });
   if (mode === 'dof') return fx14DOF(srcCanvas, W, H, { focusY: p.dofFocusY, range: p.dofRange, blur: p.dofBlur });
   if (mode === 'directional') return blurCentral(srcCanvas, W, H, { type: mode, angle: p.dirAngle, distance: p.dirDistance, samples: p.dirSamples });
@@ -27749,7 +27840,7 @@ const RUN = {
     const g = fx13Glass(s, W, H, driven ? { ...pp, texDriven: true } : pp);
     return b ? fx16GlassTex(g, W, H, pp, fx7SrcCanvas(b)) : g;
   }, n.params, GLASS_PX),
-  blurStudio: (n, [a]) => (n.params.blurMode === 'focusFrame' ? fbRun(n, a) : n.params.blurMode === 'gaussian' ? runBlur(n, [a]) : n.params.blurMode === 'spin' ? runSpinStudio(n, a) : fxStudioRun(a, fx14BlurStudio, n.params, BLUR_PX)),
+  blurStudio: (n, [a, b]) => (n.params.blurMode === 'focusFrame' ? fbRun(n, a) : n.params.blurMode === 'gaussian' ? runBlur(n, [a]) : n.params.blurMode === 'spin' ? runSpinStudio(n, a) : fxStudioRun(a, (s, W, H, pp) => fx14BlurStudio(s, W, H, b && pp.blurMode === 'motion' && pp.mtMode === 'trail' ? { ...pp, mtMaskCv: fx7SrcCanvas(b) } : pp), n.params, BLUR_PX)),
   mirrorEffect: (n, [a]) => (a ? fx7Canvas(a, (s, W, H) => fx15Mirror(s, W, H, { ...FX15_DEFAULTS, ...n.params })) : null),
   kaleidoscopeEffect: (n, [a]) => (a ? fx7Canvas(a, (s, W, H) => fx15Kaleidoscope(s, W, H, { ...FX15_DEFAULTS, ...n.params })) : null),
   rippleEffect: (n, [a]) => (a ? fx7Canvas(a, (s, W, H) => fx15Ripple(s, W, H, { ...FX15_DEFAULTS, ...n.params })) : null),
@@ -28108,7 +28199,7 @@ function fxAutoSource() {
 function fxPodeSolto(n, def) {
   if (n.type === 'brush') return false;   // Brush with no image = its own layer (fw×fh)
   if (n.type === 'effectStack') return true;
-  if (!def || !def.inputs || !(def.inputs.length === 1 || def.inputs[1] === 'module')) return false;   // socket auxiliar 'module' é opcional
+  if (!def || !def.inputs || !(def.inputs.length === 1 || def.inputs[1] === 'module' || def.inputs[1] === 'Mask')) return false;   // socket auxiliar 'module'/'Mask' é opcional
   if (def.outs && def.outs.length !== 1) return false;
   if (['input', 'output', 'mask', 'matte'].includes(def.cat)) return false;
   return !(def.params || []).some(p => ['file', 'paint', 'text', 'stack'].includes(p.type));
@@ -30038,7 +30129,7 @@ function sortTypesByTitle(entries) {
   return entries.sort((a, b) => (a[1].title).localeCompare((b[1].title), loc, { sensitivity: 'base', numeric: true }));
 }
 function stackEffectTypes() {
-  return sortTypesByTitle(Object.entries(NODE_TYPES).filter(([t, d]) => t !== 'effectStack' && !MACHINE_HIDDEN_PICK[t] && d.inputs.length === 1 &&
+  return sortTypesByTitle(Object.entries(NODE_TYPES).filter(([t, d]) => t !== 'effectStack' && !MACHINE_HIDDEN_PICK[t] && (d.inputs.length === 1 || t === 'blurStudio') &&
     !['input', 'output', 'mask'].includes(d.cat) && !d.params.some(p => ['file', 'paint', 'text', 'stack'].includes(p.type))));
 }
 function stackDefaults(type) { const o = {}; for (const p of NODE_TYPES[type].params) o[p.key] = p.def; return o; }
@@ -30487,6 +30578,11 @@ const BLUR_MODOS = {
 function blurKeysVisiveis(params) {
   const vis = new Set(['blurMode']);
   for (const k of BLUR_MODOS[(params && params.blurMode) || 'box'] || BLUR_MODOS.box) vis.add(k);
+  /* 1.23.0: Motion Trail — os controles novos só aparecem nesse estilo */
+  if (params && params.blurMode === 'motion') {
+    vis.add('mtMode');
+    if (params.mtMode === 'trail') for (const k of ['mtScaling', 'mtTaper', 'mtCompress', 'mtCurve', 'mtOpacity', 'mtMask']) vis.add(k);
+  }
   return vis;
 }
 function blurAplicaVis(raiz, params) {
