@@ -18,7 +18,7 @@ const COL = (key, label, def) => ({ type: 'color', key, label, def });
 const BTN = (key, label, action, button) => ({ type: 'button', key, label, action, button, def: '' });
 
 /* ---------- definição do nó ---------- */
-const blocoNo = extrai("  pcbEffect: {\n    title: 'PCB'", '  magicGen: {').replace(/^\s*pcbEffect:\s*/, '').replace(/,\s*$/, '');
+const blocoNo = extrai("  pcbEffect: {\n    title: 'PCB'", '  /* World (1.22.0)').replace(/^\s*pcbEffect:\s*/, '').replace(/,\s*$/, '');
 const noDef = new Function('NUM', 'ENUM', 'SEC', 'COL', 'BTN', 'BLEND', 'return (' + blocoNo + ')')(NUM, ENUM, SEC, COL, BTN, [['normal', 'Normal']]);
 const por = Object.fromEntries(noDef.params.filter(d => d.key).map(d => [d.key, d]));
 const keys = noDef.params.map(d => d.key).filter(Boolean);

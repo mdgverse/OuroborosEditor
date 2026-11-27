@@ -605,7 +605,7 @@ body.it-mode #tlPanel{display:none}
 
 /* Versão do editor — o arquivo VERSION na raiz é a fonte da verdade
    (o build do APK usa o mesmo número no versionName e falha se divergir). */
-const APP_VERSION = '1.21.0';
+const APP_VERSION = '1.22.0';
 /* tooltip do botão da marca: só o nome do produto (a versão é metadado, não entra na marca) */
 {
   const marca = document.getElementById('brandBtn');
@@ -3038,6 +3038,40 @@ const NODE_TYPES = {
       ENUM('blend', 'Blend Mode', BLEND, 'normal'),
       NUM('opacity', 'Opacity', 0, 100, 100),
       NUM('mix', 'Mix With Source', 0, 100, 100),
+    ],
+  },
+  /* World (1.22.0): os quatro efeitos do vídeo do Eye Candy num nó só —
+     Extrude 3D, Chrome líquido, Flame e Drip — sobre a forma da camada
+     (alfa ou luminância). Análise completa em docs/world.md. */
+  worldEffect: {
+    title: 'World', cat: 'style', inputs: ['Image', 'Mask'],
+    kw: 'world eye candy extrude 3d chrome liquid metal flame fire drip melt text layer',
+    params: [
+      ENUM('mode', 'Effect', [['extrude', 'Extrude'], ['chrome', 'Chrome'], ['flame', 'Flame'], ['drip', 'Drip']], 'extrude'),
+      ENUM('shapeMode', 'Shape From', [['alpha', 'Alpha'], ['luminance', 'Luminance']], 'alpha'),
+      NUM('threshold', 'Threshold', 0, 100, 50),
+      NUM('softness', 'Shape Softness', 0, 100, 30),
+      NUM('seed', 'Seed', 0, 9999, 7),
+      BTN('seedRandom', 'Seed', 'psSeed', 'Randomize seed'),
+      NUM('depth', 'Extrude Depth', 0, 240, 60),
+      NUM('dirAngle', 'Extrude Direction', -180, 180, 135),
+      NUM('taper', 'Taper', 0, 100, 0),
+      NUM('shadowI', 'Shadow Intensity', 0, 100, 65),
+      NUM('brightI', 'Brightness', 0, 100, 50),
+      NUM('bevel', 'Bevel Width', 0, 100, 45),
+      NUM('roundness', 'Corner Roundness', 0, 100, 35),
+      ENUM('env', 'Reflection Map', [['sky', 'Sky & Clouds'], ['sunset', 'Sunset'], ['studio', 'Studio'], ['mono', 'Liquid Mono']], 'sky'),
+      NUM('shine', 'Shine', 0, 100, 60),
+      NUM('fHeight', 'Flame Height', 0, 100, 45),
+      NUM('fTurb', 'Turbulence', 0, 100, 50),
+      ENUM('fDir', 'Flame Direction', [['up', 'Up'], ['down', 'Down'], ['left', 'Left'], ['right', 'Right']], 'up'),
+      ENUM('fColor', 'Flame Color', [['natural', 'Natural Fire'], ['blue', 'Blue'], ['green', 'Green'], ['violet', 'Violet']], 'natural'),
+      ENUM('fPlace', 'Flame Placement', [['over', 'Over the layer'], ['behind', 'Behind the layer']], 'over'),
+      NUM('dLength', 'Drip Length', 0, 100, 40),
+      NUM('dSize', 'Drip Width', 1, 24, 6),
+      NUM('dDensity', 'Drip Density', 0, 100, 55),
+      NUM('maskInfluence', 'Mask Influence', 0, 100, 100),
+      NUM('mix', 'Mix', 0, 100, 100),
     ],
   },
   magicGen: {
@@ -11583,6 +11617,356 @@ function fx7FastRes(a) {
   return mkRes(e);
 }
 // input canvas (screen order)
+/* WORLD_PURO_INI */
+/* World: núcleo puro dos quatro efeitos (sem DOM/WebGL). A forma vem do
+   alfa (ou da luminância) da fonte; cada efeito é uma função sobre os
+   campos — determinístico por Seed (tests/world.test.mjs). */
+const WORLD_COMUM = ['mode', 'shapeMode', 'threshold', 'softness', 'seed', 'seedRandom', 'maskInfluence', 'mix'];
+const WORLD_VIS = {
+  extrude: [...WORLD_COMUM, 'depth', 'dirAngle', 'taper', 'shadowI', 'brightI'],
+  chrome: [...WORLD_COMUM, 'bevel', 'roundness', 'env', 'shine'],
+  flame: [...WORLD_COMUM, 'fHeight', 'fTurb', 'fDir', 'fColor', 'fPlace'],
+  drip: [...WORLD_COMUM, 'dLength', 'dSize', 'dDensity'],
+};
+function worldKeysVisiveis(params) { return new Set(WORLD_VIS[(params && params.mode) || 'extrude'] || WORLD_VIS.extrude); }
+function worldRand(seed) {
+  let t = (Number(seed) || 0) >>> 0;
+  return () => {
+    t += 0x6D2B79F5;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r = (r + Math.imul(r ^ (r >>> 7), 61 | r)) ^ r;
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function worldClamp(v, a, b) { return Math.min(b, Math.max(a, v)); }
+function worldOpcoes(p) {
+  p = p || {};
+  const num = (k, d) => { const v = Number(p[k]); return isFinite(v) ? v : d; };
+  return {
+    mode: ['extrude', 'chrome', 'flame', 'drip'].includes(p.mode) ? p.mode : 'extrude',
+    shapeMode: p.shapeMode === 'luminance' ? 'luminance' : 'alpha',
+    threshold: worldClamp(num('threshold', 50), 0, 100) / 100,
+    softness: Math.round(worldClamp(num('softness', 30), 0, 100) / 100 * 3),
+    seed: Math.round(num('seed', 7)),
+    depth: worldClamp(num('depth', 60), 0, 240),
+    dirRad: num('dirAngle', 135) * Math.PI / 180,
+    taper: worldClamp(num('taper', 0), 0, 100) / 100,
+    shadow: worldClamp(num('shadowI', 65), 0, 100) / 100,
+    bright: worldClamp(num('brightI', 50), 0, 100) / 100,
+    bevel: worldClamp(num('bevel', 45), 0, 100) / 100,
+    roundness: worldClamp(num('roundness', 35), 0, 100) / 100,
+    env: ['sky', 'sunset', 'studio', 'mono'].includes(p.env) ? p.env : 'sky',
+    shine: worldClamp(num('shine', 60), 0, 100) / 100,
+    fHeight: worldClamp(num('fHeight', 45), 0, 100) / 100,
+    fTurb: worldClamp(num('fTurb', 50), 0, 100) / 100,
+    fDir: ['up', 'down', 'left', 'right'].includes(p.fDir) ? p.fDir : 'up',
+    fColor: ['natural', 'blue', 'green', 'violet'].includes(p.fColor) ? p.fColor : 'natural',
+    fPlace: p.fPlace === 'behind' ? 'behind' : 'over',
+    dLength: worldClamp(num('dLength', 40), 0, 100) / 100,
+    dSize: worldClamp(num('dSize', 6), 1, 24),
+    dDensity: worldClamp(num('dDensity', 55), 0, 100) / 100,
+  };
+}
+function worldSuaviza(src, W, H, passes) {
+  let a = Float32Array.from(src), b = new Float32Array(src.length);
+  for (let p = 0; p < passes; p++) {
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      let s = 0, c = 0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const xx = x + dx, yy = y + dy;
+        if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue;
+        s += a[yy * W + xx]; c++;
+      }
+      b[y * W + x] = s / c;
+    }
+    [a, b] = [b, a];
+  }
+  return a;
+}
+/* Forma da camada: alfa ou luminância-chave, suavizada. */
+function worldMascara(dados, W, H, op) {
+  const base = new Float32Array(W * H);
+  for (let i = 0, j = 0; i < dados.length; i += 4, j++) {
+    if (op.shapeMode === 'luminance') {
+      const lum = (0.2126 * dados[i] + 0.7152 * dados[i + 1] + 0.0722 * dados[i + 2]) / 255;
+      base[j] = worldClamp((lum - op.threshold) * 6 + 0.5, 0, 1) * (dados[i + 3] / 255);
+    } else {
+      base[j] = dados[i + 3] / 255;
+    }
+  }
+  return worldSuaviza(base, W, H, op.softness);
+}
+/* Mapas de reflexão procedurais (gradientes por faixas, como os ambientes
+   do plugin: céu com nuvem, pôr do sol, estúdio e metal líquido mono). */
+const WORLD_ENVS = {
+  sky: [[0, [10, 14, 38]], [0.34, [44, 88, 168]], [0.5, [216, 238, 255]], [0.58, [96, 148, 208]], [1, [12, 16, 40]]],
+  sunset: [[0, [24, 10, 38]], [0.36, [120, 44, 92]], [0.52, [255, 166, 66]], [0.6, [214, 92, 52]], [1, [30, 12, 30]]],
+  studio: [[0, [18, 18, 20]], [0.38, [88, 88, 94]], [0.5, [245, 245, 248]], [0.62, [70, 70, 76]], [1, [24, 24, 28]]],
+  mono: [[0, [6, 6, 8]], [0.3, [70, 72, 80]], [0.48, [238, 240, 244]], [0.55, [120, 124, 132]], [0.75, [30, 30, 36]], [1, [10, 10, 12]]],
+};
+function worldEnvCor(env, t) {
+  const stops = WORLD_ENVS[env] || WORLD_ENVS.sky;
+  t = worldClamp(t, 0, 1);
+  for (let i = 1; i < stops.length; i++) {
+    if (t <= stops[i][0]) {
+      const [t1, c1] = stops[i - 1], [t2, c2] = stops[i];
+      const k = (t - t1) / Math.max(1e-6, t2 - t1);
+      return [c1[0] + (c2[0] - c1[0]) * k, c1[1] + (c2[1] - c1[1]) * k, c1[2] + (c2[2] - c1[2]) * k];
+    }
+  }
+  return stops[stops.length - 1][1];
+}
+/* Cor do chrome num ponto: normal do campo de altura reflete o ambiente;
+   Shine adiciona o especular; a altura sombreia o miolo. */
+function worldChromeCor(h, gx, gy, op) {
+  const k = 2.2 + op.bevel * 9;
+  let nx = -gx * k, ny = gy * k, nz = 1;
+  const l = Math.hypot(nx, ny, nz) || 1;
+  nx /= l; ny /= l; nz /= l;
+  const t = worldClamp(0.5 + ny * 0.55 - nx * 0.18 + (h - 0.5) * 0.3, 0, 1);
+  const base = worldEnvCor(op.env, t);
+  const spec = Math.pow(Math.max(0, -nx * 0.35 - ny * 0.75 + nz * 0.55), 6) * op.shine;
+  const sombra = 0.5 + 0.62 * worldClamp(h * 1.5, 0, 1);
+  return [
+    Math.min(255, base[0] * sombra + spec * 255),
+    Math.min(255, base[1] * sombra + spec * 255),
+    Math.min(255, base[2] * sombra + spec * 255),
+    worldClamp((h - 0.02) * 3.2, 0, 1),
+  ];
+}
+/* Ruído de valor determinístico (fbm de 3 oitavas) para chama e gotas. */
+function worldHash(ix, iy, seed) {
+  let h = (ix * 374761393 + iy * 668265263 + (seed | 0) * 962287) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return (((h ^ (h >>> 16)) >>> 0) % 10000) / 10000;
+}
+function worldFbm(x, y, seed) {
+  let v = 0, amp = 0.55, tot = 0;
+  for (let o = 0; o < 3; o++) {
+    const ix = Math.floor(x), iy = Math.floor(y), fx = x - ix, fy = y - iy;
+    const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+    const a = worldHash(ix, iy, seed + o * 7), b = worldHash(ix + 1, iy, seed + o * 7);
+    const c = worldHash(ix, iy + 1, seed + o * 7), d = worldHash(ix + 1, iy + 1, seed + o * 7);
+    v += amp * ((a + (b - a) * sx) * (1 - sy) + (c + (d - c) * sx) * sy);
+    tot += amp; amp *= 0.5; x *= 2.03; y *= 2.03;
+  }
+  return worldClamp(v / tot, 0, 1);
+}
+/* Contornos da forma por coluna (topo/baixo) e por linha (esq/dir). */
+function worldContornos(shape, W, H) {
+  const topo = new Int32Array(W).fill(-1), baixo = new Int32Array(W).fill(-1);
+  const esq = new Int32Array(H).fill(-1), dir = new Int32Array(H).fill(-1);
+  for (let x = 0; x < W; x++) {
+    for (let y = 0; y < H; y++) if (shape[y * W + x] > 0.5) { topo[x] = y; break; }
+    for (let y = H - 1; y >= 0; y--) if (shape[y * W + x] > 0.5) { baixo[x] = y; break; }
+  }
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) if (shape[y * W + x] > 0.5) { esq[y] = x; break; }
+    for (let x = W - 1; x >= 0; x--) if (shape[y * W + x] > 0.5) { dir[y] = x; break; }
+  }
+  return { topo, baixo, esq, dir };
+}
+/* Gotas do Drip: nascem do contorno inferior, comprimento pela seed. */
+function worldGeraGotas(baixo, W, H, op) {
+  const rng = worldRand(op.seed * 331 + 7);
+  const gotas = [];
+  const passo = Math.max(2, Math.round(op.dSize * 0.9));
+  const maxLen = Math.max(2, op.dLength * H * 0.45);
+  for (let x = 2; x < W - 2; x += passo) {
+    if (baixo[x] < 0 || baixo[x] >= H - 2) continue;
+    if (rng() > op.dDensity) continue;
+    const len = maxLen * (0.25 + 0.75 * rng());
+    gotas.push({ x, y: baixo[x], len, w: op.dSize * (0.7 + rng() * 0.6) });
+  }
+  return gotas;
+}
+/* Intensidade da chama: envelope que decai com a distância ao contorno,
+   modulado pelo fbm (turbulência). dist/maxHLoc em [0,1]. */
+function worldChama(dist, maxHLoc, fbmVal) {
+  if (maxHLoc <= 0 || dist < 0) return 0;
+  const env = 1 - dist / maxHLoc;
+  if (env <= 0) return 0;
+  return worldClamp(env * (0.4 + 0.95 * fbmVal) - (1 - env) * 0.22, 0, 1);
+}
+const WORLD_CHAMAS = {
+  natural: [[0.12, [140, 16, 0]], [0.38, [238, 84, 4]], [0.66, [255, 178, 44]], [1, [255, 244, 206]]],
+  blue: [[0.12, [8, 26, 140]], [0.42, [36, 96, 255]], [0.7, [110, 190, 255]], [1, [228, 244, 255]]],
+  green: [[0.12, [4, 92, 30]], [0.42, [26, 190, 80]], [0.7, [150, 255, 170]], [1, [236, 255, 240]]],
+  violet: [[0.12, [52, 8, 120]], [0.42, [140, 44, 230]], [0.7, [205, 130, 255]], [1, [246, 232, 255]]],
+};
+function worldChamaCor(cor, t) {
+  const stops = WORLD_CHAMAS[cor] || WORLD_CHAMAS.natural;
+  t = worldClamp(t, 0, 1);
+  for (let i = 0; i < stops.length; i++) {
+    if (t <= stops[i][0] || i === stops.length - 1) {
+      if (i === 0) return stops[0][1];
+      const [t1, c1] = stops[i - 1], [t2, c2] = stops[i];
+      const k = (t - t1) / Math.max(1e-6, t2 - t1);
+      return [c1[0] + (c2[0] - c1[0]) * k, c1[1] + (c2[1] - c1[1]) * k, c1[2] + (c2[2] - c1[2]) * k];
+    }
+  }
+  return stops[stops.length - 1][1];
+}
+/* WORLD_PURO_FIM */
+
+function worldAplicaVis(raiz, params) {
+  if (!raiz || !raiz.querySelectorAll) return;
+  const vis = worldKeysVisiveis(params);
+  raiz.querySelectorAll('[data-pkey]').forEach(el => { el.style.display = vis.has(el.dataset.pkey) ? '' : 'none'; });
+}
+/* Análise da forma (grade ≤640px), em cache no nó: mexer em cor,
+   intensidade ou mix não recalcula a máscara. */
+function worldAnalise(n, srcCv, op) {
+  const W = srcCv.width, H = srcCv.height;
+  const esc = Math.min(1, 640 / Math.max(W, H));
+  const aW = Math.max(8, Math.round(W * esc)), aH = Math.max(8, Math.round(H * esc));
+  const cv = fx7NewCanvas(aW, aH), g = cv.getContext('2d', { willReadFrequently: true });
+  g.drawImage(srcCv, 0, 0, aW, aH);
+  const dados = g.getImageData(0, 0, aW, aH);
+  let chave = aW + 'x' + aH + '|' + op.shapeMode + '|' + op.threshold + '|' + op.softness + '|';
+  for (let i = 0; i < dados.data.length; i += 52) chave += ((dados.data[i + 3] / 16) | 0).toString(16) + ((dados.data[i] / 32) | 0).toString(16);
+  if (n.runtime.worldAna && n.runtime.worldChave === chave) return n.runtime.worldAna;
+  const ana = { aW, aH, dados, shape: worldMascara(dados.data, aW, aH, op) };
+  n.runtime.worldAna = ana;
+  n.runtime.worldChave = chave;
+  return ana;
+}
+/* Cópia da camada escurecida (só onde há forma): paredes do Extrude. */
+function worldSombraCv(srcCv, preto) {
+  const cv = fx7NewCanvas(srcCv.width, srcCv.height), g = cv.getContext('2d');
+  g.drawImage(srcCv, 0, 0);
+  g.globalCompositeOperation = 'source-atop';
+  g.fillStyle = 'rgba(0,0,0,' + worldClamp(preto, 0, 1) + ')';
+  g.fillRect(0, 0, cv.width, cv.height);
+  return cv;
+}
+function worldExtrude(srcCv, W, H, op) {
+  const out = fx7NewCanvas(W, H), g = out.getContext('2d');
+  const prof = op.depth * (Math.min(W, H) / 900);
+  if (prof > 0.5) {
+    const steps = Math.max(1, Math.min(72, Math.round(prof)));
+    const dx = Math.cos(op.dirRad), dy = Math.sin(op.dirRad);
+    const tons = [0.85, 0.68, 0.52, 0.38].map(a => worldSombraCv(srcCv, a * op.shadow * (1.15 - op.bright * 0.5) + 0.03));
+    const cx = W / 2, cy = H / 2;
+    for (let i = steps; i >= 1; i--) {
+      const t = i / steps;
+      const recuo = 1 - op.taper * 0.45 * t;
+      const esc = 1 - op.taper * 0.28 * t;
+      g.save();
+      g.translate(cx + dx * prof * t * recuo, cy + dy * prof * t * recuo);
+      g.scale(esc, esc);
+      g.translate(-cx, -cy);
+      g.drawImage(tons[Math.min(tons.length - 1, Math.floor(t * tons.length))], 0, 0);
+      g.restore();
+    }
+  }
+  g.drawImage(srcCv, 0, 0);
+  return out;
+}
+function worldChrome(ana, W, H, op) {
+  const { aW, aH } = ana;
+  const altura = worldSuaviza(ana.shape, aW, aH, Math.round(op.bevel * 7 + op.roundness * 5));
+  const fCv = fx7NewCanvas(aW, aH), fg = fCv.getContext('2d');
+  const img = fg.createImageData(aW, aH), d = img.data;
+  for (let y = 0; y < aH; y++) for (let x = 0; x < aW; x++) {
+    const j = y * aW + x;
+    const gx = altura[y * aW + Math.min(aW - 1, x + 1)] - altura[y * aW + Math.max(0, x - 1)];
+    const gy = altura[Math.min(aH - 1, y + 1) * aW + x] - altura[Math.max(0, y - 1) * aW + x];
+    const cor = worldChromeCor(altura[j], gx, gy, op);
+    const i = j * 4;
+    d[i] = cor[0]; d[i + 1] = cor[1]; d[i + 2] = cor[2]; d[i + 3] = Math.round(cor[3] * 255);
+  }
+  fg.putImageData(img, 0, 0);
+  const out = fx7NewCanvas(W, H), og = out.getContext('2d');
+  og.drawImage(fCv, 0, 0, W, H);
+  return out;
+}
+function worldFlame(ana, W, H, op) {
+  const { aW, aH } = ana;
+  const cont = worldContornos(ana.shape, aW, aH);
+  const maxH = Math.max(2, op.fHeight * aH * 0.6);
+  const freq = 0.012 + op.fTurb * 0.035;
+  const fCv = fx7NewCanvas(aW, aH), fg = fCv.getContext('2d');
+  const img = fg.createImageData(aW, aH), d = img.data;
+  for (let y = 0; y < aH; y++) for (let x = 0; x < aW; x++) {
+    let dist = -1, across = 0;
+    if (op.fDir === 'up') { const c = cont.topo[x]; if (c >= 0) { dist = c - y; across = x; } }
+    else if (op.fDir === 'down') { const c = cont.baixo[x]; if (c >= 0) { dist = y - c; across = x; } }
+    else if (op.fDir === 'left') { const c = cont.esq[y]; if (c >= 0) { dist = c - x; across = y; } }
+    else { const c = cont.dir[y]; if (c >= 0) { dist = x - c; across = y; } }
+    if (dist <= 0) continue;
+    const maxHLoc = maxH * (0.5 + 0.8 * worldFbm(across * 0.02, op.seed * 3.1, op.seed));
+    const f = worldFbm(across * freq, dist * freq * 1.7 + op.seed * 17.3, op.seed);
+    const inten = worldChama(dist, maxHLoc, f);
+    if (inten <= 0.02) continue;
+    const cor = worldChamaCor(op.fColor, inten);
+    const i = (y * aW + x) * 4;
+    d[i] = cor[0]; d[i + 1] = cor[1]; d[i + 2] = cor[2]; d[i + 3] = Math.round(inten * 235);
+  }
+  fg.putImageData(img, 0, 0);
+  const out = fx7NewCanvas(W, H), og = out.getContext('2d');
+  og.drawImage(fCv, 0, 0, W, H);
+  return out;
+}
+function worldDrip(ana, W, H, op) {
+  const cont = worldContornos(ana.shape, ana.aW, ana.aH);
+  const gotas = worldGeraGotas(cont.baixo, ana.aW, ana.aH, op);
+  const out = fx7NewCanvas(W, H), g = out.getContext('2d');
+  const sx = W / ana.aW, sy = H / ana.aH, escW = W / 1024, dd = ana.dados.data;
+  for (const gt of gotas) {
+    const x = (gt.x + 0.5) * sx, y = (gt.y + 1) * sy, len = gt.len * sy, w = Math.max(1, gt.w * escW);
+    const px = Math.max(0, Math.min(ana.aW - 1, gt.x)), py = Math.max(0, Math.min(ana.aH - 1, gt.y - 2));
+    const i = (py * ana.aW + px) * 4;
+    g.fillStyle = 'rgb(' + dd[i] + ',' + dd[i + 1] + ',' + dd[i + 2] + ')';
+    g.fillRect(x - w / 2, y - 2, w, len);
+    g.beginPath(); g.arc(x, y + len, w / 2, 0, Math.PI * 2); g.fill();
+  }
+  return out;
+}
+/* Render do World: efeito escolhido → máscara opcional → Mix com a fonte. */
+function worldRender(n, srcCv, maskCv) {
+  const p = n.params, op = worldOpcoes(p);
+  const W = srcCv.width, H = srcCv.height;
+  const ana = worldAnalise(n, srcCv, op);
+  let arte;
+  if (op.mode === 'extrude') arte = worldExtrude(srcCv, W, H, op);
+  else if (op.mode === 'chrome') arte = worldChrome(ana, W, H, op);
+  else if (op.mode === 'flame') {
+    arte = worldFlame(ana, W, H, op);
+    if (op.fPlace === 'behind') {
+      const c = fx7NewCanvas(W, H), cg = c.getContext('2d');
+      cg.drawImage(arte, 0, 0); cg.drawImage(srcCv, 0, 0);
+      arte = c;
+    }
+  }
+  else arte = worldDrip(ana, W, H, op);
+  if (maskCv) {
+    const inf = worldClamp(Number(p.maskInfluence ?? 100), 0, 100) / 100;
+    if (inf > 0) {
+      const mc = fx7NewCanvas(W, H), mg = mc.getContext('2d', { willReadFrequently: true });
+      mg.drawImage(maskCv, 0, 0, W, H);
+      const md = mg.getImageData(0, 0, W, H), dd = md.data;
+      for (let i = 0; i < dd.length; i += 4) {
+        const lum = (0.2126 * dd[i] + 0.7152 * dd[i + 1] + 0.0722 * dd[i + 2]) / 255;
+        dd[i] = 255; dd[i + 1] = 255; dd[i + 2] = 255;
+        dd[i + 3] = Math.round(255 * ((1 - inf) + inf * lum));
+      }
+      mg.putImageData(md, 0, 0);
+      const ag = arte.getContext('2d');
+      ag.globalCompositeOperation = 'destination-in';
+      ag.drawImage(mc, 0, 0);
+      ag.globalCompositeOperation = 'source-over';
+    }
+  }
+  const mix = worldClamp(Number(p.mix ?? 100), 0, 100) / 100;
+  if (mix >= 1 && op.mode === 'extrude') return arte;
+  const out = fx7NewCanvas(W, H), og = out.getContext('2d');
+  og.drawImage(srcCv, 0, 0);
+  og.globalAlpha = mix;
+  og.drawImage(arte, 0, 0);
+  og.globalAlpha = 1;
+  return out;
+}
 /* PCB_PURO_INI */
 /* PCB: análise da imagem e geração da geometria do circuito. Sem DOM/WebGL:
    recebe os pixels (RGBA) e devolve campos + geometria em coordenadas da
@@ -26719,6 +27103,10 @@ const RUN = {
     if (!a) return null;
     return cpuRes(pcbRender(n, readResult(a), m ? readResult(m) : null));
   },
+  worldEffect: (n, [a, m]) => {
+    if (!a) return null;
+    return cpuRes(worldRender(n, readResult(a), m ? readResult(m) : null));
+  },
   magicGen: (n) => {
     const p = n.params;
     const W = clamp(Math.round(Number(p.fw) || 1024), 1, 8192), H = clamp(Math.round(Number(p.fh) || 1024), 1, 8192);
@@ -30266,6 +30654,7 @@ function buildControls(n, body) {
   }
   if (n.type === 'blurStudio') blurAplicaVis(body, n.params);
   if (n.type === 'glowEffect') glowAplicaVis(body, n.params);
+  if (n.type === 'worldEffect') worldAplicaVis(body, n.params);
   if (n.type === 'pixelSort' || n.type === 'sortedEffect') psAplicaVis(body, n.params);
   if (n.type === 'bandMachine') bandAplicaVis(body, n.params);
   if (n.type === 'halfmode') halfModeAplicaVis(body, n.params);
@@ -30439,7 +30828,7 @@ function makeEnum(n, p) {
     requestRender();
     commit();
   });
-  n.ui[p.key] = () => { sel.value = String(n.params[p.key]); if ((n.type === 'pixelSort' || n.type === 'sortedEffect') && n.el) psAplicaVis(n.el, n.params); if (n.type === 'glassStudio' && (p.key === 'glassMode' || p.key === 'glassScope') && n.el) glassAplicaVis(n.el, n.params, n); if (n.type === 'blurStudio' && p.key === 'blurMode' && n.el) blurAplicaVis(n.el, n.params); if (n.type === 'glowEffect' && p.key === 'style' && n.el) glowAplicaVis(n.el, n.params); if (n.type === 'halfmode' && n.el) halfModeAplicaVis(n.el, n.params); };
+  n.ui[p.key] = () => { sel.value = String(n.params[p.key]); if ((n.type === 'pixelSort' || n.type === 'sortedEffect') && n.el) psAplicaVis(n.el, n.params); if (n.type === 'glassStudio' && (p.key === 'glassMode' || p.key === 'glassScope') && n.el) glassAplicaVis(n.el, n.params, n); if (n.type === 'blurStudio' && p.key === 'blurMode' && n.el) blurAplicaVis(n.el, n.params); if (n.type === 'glowEffect' && p.key === 'style' && n.el) glowAplicaVis(n.el, n.params); if (n.type === 'worldEffect' && p.key === 'mode' && n.el) worldAplicaVis(n.el, n.params); if (n.type === 'halfmode' && n.el) halfModeAplicaVis(n.el, n.params); };
   row.append(lb, sel);
   return row;
 }
