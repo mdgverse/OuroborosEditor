@@ -90,30 +90,43 @@ Núcleo puro (`worldMascara`, `worldChromeCor`, `worldFbm`,
 `tests/world.test.mjs`. Saída composta como nos demais efeitos:
 máscara opcional (Mask Influence) e Mix com a fonte.
 
-### Chrome aprimorado (1.24.0)
+### Chrome aprimorado (1.24.0, completado na 1.26.0)
 
 Referência adicional: "How To Make Black Chrome Text In Photoshop!"
 (transcrição obtida da página do vídeo; o arquivo não foi baixado) —
 bevel suave com **curva de contorno** moldando as bandas do reflexo,
 gradiente preto→branco como ambiente, realce nas bordas e brilho por
-cima. Novos controles do Chrome, todos com efeito real no cálculo de
-`worldChromeCor` e **neutros nos padrões** (projetos antigos renderizam
-idêntico):
+cima.
 
-- **Reflection Intensity** (0–200%) e **Reflection Contrast** — o
-  contraste refaz as bandas do mapa de reflexão em torno do meio, como
-  a curva de contorno do bevel.
-- **Reflection Distortion** — deforma só a consulta ao ambiente (ruído
-  fbm), sem deformar a forma.
-- **Surface Distortion** — perturba as normais com fbm: superfície
-  orgânica/irregular, distinta da distorção do reflexo.
-- **Roughness** — borra mais o campo de altura e espalha o especular
-  (expoente menor + pico menor): metal fosco, não só "menos brilho".
-- **Highlight Focus** — expoente do especular (foco do realce).
-- **Metallic Tint** — tingue o reflexo pela cor da fonte (metais
-  coloridos); **Tint** (cor) multiplica o reflexo (chrome colorido,
-  realce continua branco); **Exposure** (−100..100) fecha a receita do
-  vídeo: Liquid Mono + Exposure negativa = black chrome.
+Na 1.24 entrou um subconjunto com nomes próprios; a pedido do usuário,
+a 1.26.0 entrega a lista completa, organizada em **grupos recolhíveis**
+(o mesmo `SEC` do PCB), cada controle com função própria no cálculo de
+`worldChromeCor`/no pipeline do bevel e **neutro no padrão** (projetos
+antigos renderizam idêntico). Verificação individual de cada controle
+em `tests/world-chrome.test.mjs`.
+
+- **Bevel**: Bevel Enabled (desliga = topo plano, borda dura), Bevel
+  Amount (largura do campo — a chave `bevel` de sempre), Bevel Depth
+  (força das normais), Bevel Segments (quantiza o chanfro em degraus;
+  16 = contínuo), Bevel Profile (curva côncavo↔convexo do perfil),
+  Bevel Smoothness (suaviza depois do perfil), Bevel Direction (gira a
+  luz do chanfro) e Corner Roundness (o de sempre, raio dos cantos).
+- **Reflection**: Reflection Map (ambientes procedurais), Reflection
+  Intensity, Reflection Contrast (bandas como a curva de contorno),
+  Reflection Blur (média das bandas vizinhas do ambiente) e Reflection
+  Distortion (deforma só a consulta ao ambiente, não a forma).
+- **Metallic**: Metallic Intensity (0 = cor da fonte sem metal;
+  100 = chrome pleno), Metallic Tint (reflexo tingido pela fonte),
+  Roughness (borra o campo e espalha o especular), Glossiness (foco do
+  especular — a chave `cHighlight`) e Specular (intensidade do
+  especular — a chave `shine`, renomeada na etiqueta).
+- **Surface**: Surface Distortion (fbm de baixa frequência nas
+  normais), Wave (ondulação senoidal), Noise (granulado fino) e Detail
+  (oitavas do ruído, 1–5; 50 = as 3 originais).
+- **Color**: Base Color (tingue o corpo sombreado do metal; preto =
+  sem efeito), Tint (multiplica o reflexo todo; realce continua
+  branco), Exposure (Liquid Mono + exposição negativa = black chrome
+  do vídeo) e Highlight (intensidade das áreas mais luminosas).
 
 ## Desempenho
 

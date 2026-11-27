@@ -129,6 +129,8 @@ jobs:
         run: node tests/blur-pins.test.mjs
       - name: World · Flame aprimorado (campo e animação)
         run: node tests/world-flame.test.mjs
+      - name: World · Chrome completo (grupos Bevel/Reflection/Metallic/Surface/Color)
+        run: node tests/world-chrome.test.mjs
       - name: Versão (VERSION = index.html = APK)
         run: node tests/version.test.mjs
       - name: Higiene (código morto, CSS sem uso, reference/ fora)

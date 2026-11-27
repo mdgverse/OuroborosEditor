@@ -15,9 +15,10 @@ const NUM = (key, label, min, max, def, step = 1) => ({ type: 'num', key, label,
 const ENUM = (key, label, options, def) => ({ type: 'enum', key, label, options, def });
 const BTN = (key, label, action, button) => ({ type: 'button', key, label, action, button, def: '' });
 const COL = (key, label, def) => ({ type: 'color', key, label, def });
+const SEC = (key, label, tip, closed) => ({ type: 'sec', key, label, tip, closed: !!closed });
 
 const blocoNo = extrai("  worldEffect: {\n    title: 'World'", '  magicGen: {').replace(/^\s*worldEffect:\s*/, '').replace(/,\s*$/, '');
-const noDef = new Function('NUM', 'ENUM', 'BTN', 'COL', 'return (' + blocoNo + ')')(NUM, ENUM, BTN, COL);
+const noDef = new Function('NUM', 'ENUM', 'BTN', 'COL', 'SEC', 'return (' + blocoNo + ')')(NUM, ENUM, BTN, COL, SEC);
 const por = Object.fromEntries(noDef.params.map(d => [d.key, d]));
 
 for (const k of ['fHeight', 'fTurb', 'fDir', 'fColor', 'fPlace'])
