@@ -121,6 +121,8 @@ jobs:
         run: node tests/inserir-grafo.test.mjs
       - name: World (Extrude, Chrome, Flame e Drip do vídeo)
         run: node tests/world.test.mjs
+      - name: Blur Studio · Motion Trail (sem tocar no clássico)
+        run: node tests/blur-motion.test.mjs
       - name: Versão (VERSION = index.html = APK)
         run: node tests/version.test.mjs
       - name: Higiene (código morto, CSS sem uso, reference/ fora)
