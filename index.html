@@ -605,7 +605,7 @@ body.it-mode #tlPanel{display:none}
 
 /* Versão do editor — o arquivo VERSION na raiz é a fonte da verdade
    (o build do APK usa o mesmo número no versionName e falha se divergir). */
-const APP_VERSION = '1.25.0';
+const APP_VERSION = '1.26.0';
 /* tooltip do botão da marca: só o nome do produto (a versão é metadado, não entra na marca) */
 {
   const marca = document.getElementById('brandBtn');
@@ -3058,15 +3058,6 @@ const NODE_TYPES = {
       NUM('taper', 'Taper', 0, 100, 0),
       NUM('shadowI', 'Shadow Intensity', 0, 100, 65),
       NUM('brightI', 'Brightness', 0, 100, 50),
-      NUM('bevel', 'Bevel Width', 0, 100, 45),
-      NUM('roundness', 'Corner Roundness', 0, 100, 35),
-      ENUM('env', 'Reflection Map', [['sky', 'Sky & Clouds'], ['sunset', 'Sunset'], ['studio', 'Studio'], ['mono', 'Liquid Mono']], 'sky'),
-      NUM('shine', 'Shine', 0, 100, 60),
-      NUM('cRefl', 'Reflection Intensity', 0, 200, 100), NUM('cContrast', 'Reflection Contrast', 0, 100, 50),
-      NUM('cDistort', 'Reflection Distortion', 0, 100, 0), NUM('cSurf', 'Surface Distortion', 0, 100, 0),
-      NUM('cRough', 'Roughness', 0, 100, 0), NUM('cHighlight', 'Highlight Focus', 0, 100, 50),
-      NUM('cMetal', 'Metallic Tint', 0, 100, 0), COL('cTint', 'Tint', '#ffffff'),
-      NUM('cExpo', 'Exposure', -100, 100, 0),
       NUM('fHeight', 'Flame Height', 0, 100, 45),
       NUM('fTurb', 'Turbulence', 0, 100, 50),
       ENUM('fDir', 'Flame Direction', [['up', 'Up'], ['down', 'Down'], ['left', 'Left'], ['right', 'Right']], 'up'),
@@ -3084,6 +3075,30 @@ const NODE_TYPES = {
       NUM('dDensity', 'Drip Density', 0, 100, 55),
       NUM('maskInfluence', 'Mask Influence', 0, 100, 100),
       NUM('mix', 'Mix', 0, 100, 100),
+      /* Chrome (1.26.0): grupos completos — Bevel, Reflection, Metallic,
+         Surface, Color. As chaves antigas (bevel, roundness, env, shine,
+         cRefl…) foram mantidas; shine virou o Specular e cHighlight o
+         Glossiness, com a mesma matemática nos padrões. */
+      SEC('secBevel', 'Bevel', 'Shape of the raised metal edge.'),
+      ENUM('bevelOn', 'Bevel Enabled', [['on', 'On'], ['off', 'Off']], 'on'),
+      NUM('bevel', 'Bevel Amount', 0, 100, 45), NUM('cBevelDepth', 'Bevel Depth', 0, 100, 50),
+      NUM('cBevelSeg', 'Bevel Segments', 2, 16, 16), NUM('cBevelProfile', 'Bevel Profile', 0, 100, 50),
+      NUM('cBevelSmooth', 'Bevel Smoothness', 0, 100, 0), NUM('cBevelDir', 'Bevel Direction', -180, 180, 0),
+      NUM('roundness', 'Corner Roundness', 0, 100, 35),
+      SEC('secRefl', 'Reflection', 'The environment reflected by the metal.'),
+      ENUM('env', 'Reflection Map', [['sky', 'Sky & Clouds'], ['sunset', 'Sunset'], ['studio', 'Studio'], ['mono', 'Liquid Mono']], 'sky'),
+      NUM('cRefl', 'Reflection Intensity', 0, 200, 100), NUM('cContrast', 'Reflection Contrast', 0, 100, 50),
+      NUM('cReflBlur', 'Reflection Blur', 0, 100, 0), NUM('cDistort', 'Reflection Distortion', 0, 100, 0),
+      SEC('secMetal', 'Metallic', 'How metal the surface behaves.'),
+      NUM('cMetalI', 'Metallic Intensity', 0, 100, 100), NUM('cMetal', 'Metallic Tint', 0, 100, 0),
+      NUM('cRough', 'Roughness', 0, 100, 0), NUM('cHighlight', 'Glossiness', 0, 100, 50),
+      NUM('shine', 'Specular', 0, 100, 60),
+      SEC('secSurf', 'Surface', 'Irregularities of the metal surface itself.'),
+      NUM('cSurf', 'Surface Distortion', 0, 100, 0), NUM('cWave', 'Wave', 0, 100, 0),
+      NUM('cNoise', 'Noise', 0, 100, 0), NUM('cDetail', 'Detail', 0, 100, 50),
+      SEC('secColor', 'Color', 'Final color of the chrome.'),
+      COL('cBase', 'Base Color', '#000000'), COL('cTint', 'Tint', '#ffffff'),
+      NUM('cExpo', 'Exposure', -100, 100, 0), NUM('cHi', 'Highlight', 0, 100, 50),
     ],
   },
   magicGen: {
@@ -11645,7 +11660,12 @@ function fx7FastRes(a) {
 const WORLD_COMUM = ['mode', 'shapeMode', 'threshold', 'softness', 'seed', 'seedRandom', 'maskInfluence', 'mix'];
 const WORLD_VIS = {
   extrude: [...WORLD_COMUM, 'depth', 'dirAngle', 'taper', 'shadowI', 'brightI'],
-  chrome: [...WORLD_COMUM, 'bevel', 'roundness', 'env', 'shine', 'cRefl', 'cContrast', 'cDistort', 'cSurf', 'cRough', 'cHighlight', 'cMetal', 'cTint', 'cExpo'],
+  chrome: [...WORLD_COMUM,
+    'secBevel', 'bevelOn', 'bevel', 'cBevelDepth', 'cBevelSeg', 'cBevelProfile', 'cBevelSmooth', 'cBevelDir', 'roundness',
+    'secRefl', 'env', 'cRefl', 'cContrast', 'cReflBlur', 'cDistort',
+    'secMetal', 'cMetalI', 'cMetal', 'cRough', 'cHighlight', 'shine',
+    'secSurf', 'cSurf', 'cWave', 'cNoise', 'cDetail',
+    'secColor', 'cBase', 'cTint', 'cExpo', 'cHi'],
   flame: [...WORLD_COMUM, 'fHeight', 'fTurb', 'fDir', 'fColor', 'fPlace', 'fWidth', 'fDensity', 'fSpread', 'fVar', 'fSpeed', 'fOsc', 'fDetail', 'fEdge', 'fIntensity', 'fBright', 'fContrast', 'fCore', 'fGlow', 'fGrad'],
   drip: [...WORLD_COMUM, 'dLength', 'dSize', 'dDensity'],
 };
@@ -11687,6 +11707,19 @@ function worldOpcoes(p) {
     cMetal: worldClamp(num('cMetal', 0), 0, 100) / 100,
     cTint: (() => { const m = /^#?([0-9a-f]{6})$/i.exec(String(p.cTint || '#ffffff')); if (!m) return [1, 1, 1]; const v = parseInt(m[1], 16); return [((v >> 16) & 255) / 255, ((v >> 8) & 255) / 255, (v & 255) / 255]; })(),
     cExpo: worldClamp(num('cExpo', 0), -100, 100) / 100,
+    bevelOn: p.bevelOn !== 'off',
+    cBevelDepth: worldClamp(num('cBevelDepth', 50), 0, 100) / 100,
+    cBevelSeg: Math.round(worldClamp(num('cBevelSeg', 16), 2, 16)),
+    cBevelProfile: worldClamp(num('cBevelProfile', 50), 0, 100) / 100,
+    cBevelSmooth: worldClamp(num('cBevelSmooth', 0), 0, 100) / 100,
+    cBevelDir: num('cBevelDir', 0) * Math.PI / 180,
+    cReflBlur: worldClamp(num('cReflBlur', 0), 0, 100) / 100,
+    cMetalI: worldClamp(num('cMetalI', 100), 0, 100) / 100,
+    cWave: worldClamp(num('cWave', 0), 0, 100) / 100,
+    cNoise: worldClamp(num('cNoise', 0), 0, 100) / 100,
+    cDetail: 1 + Math.round(worldClamp(num('cDetail', 50), 0, 100) / 100 * 4),
+    cBase: (() => { const m = /^#?([0-9a-f]{6})$/i.exec(String(p.cBase || '#000000')); if (!m) return [0, 0, 0]; const v = parseInt(m[1], 16); return [((v >> 16) & 255) / 255, ((v >> 8) & 255) / 255, (v & 255) / 255]; })(),
+    cHi: worldClamp(num('cHi', 50), 0, 100) / 100,
     fHeight: worldClamp(num('fHeight', 45), 0, 100) / 100,
     fTurb: worldClamp(num('fTurb', 50), 0, 100) / 100,
     fDir: ['up', 'down', 'left', 'right'].includes(p.fDir) ? p.fDir : 'up',
@@ -11771,20 +11804,43 @@ function worldEnvCor(env, t) {
    cor da fonte; Tint/Exposure fecham a cor (chrome escuro = Mono +
    Exposure negativa). Com os padrões, a saída é idêntica à anterior. */
 function worldChromeCor(h, gx, gy, op, x, y, srcData, srcI) {
+  /* Surface: distorção orgânica (fbm baixa), ondulação senoidal (Wave) e
+     granulado fino (Noise) perturbam as normais — frequências distintas,
+     Detail controla as oitavas do ruído. */
   if (op.cSurf > 0) {
-    gx += (worldFbm((x || 0) * 0.06 + 13.7, (y || 0) * 0.06, op.seed) - 0.5) * op.cSurf * 1.6;
-    gy += (worldFbm((x || 0) * 0.06, (y || 0) * 0.06 + 7.3, op.seed) - 0.5) * op.cSurf * 1.6;
+    gx += (worldFbmN((x || 0) * 0.06 + 13.7, (y || 0) * 0.06, op.seed, op.cDetail) - 0.5) * op.cSurf * 1.6;
+    gy += (worldFbmN((x || 0) * 0.06, (y || 0) * 0.06 + 7.3, op.seed, op.cDetail) - 0.5) * op.cSurf * 1.6;
   }
-  const k = 2.2 + op.bevel * 9;
+  if (op.cWave > 0) {
+    gx += Math.sin((y || 0) * 0.11 + op.seed * 2.7) * op.cWave * 0.85;
+    gy += Math.cos((x || 0) * 0.09 + op.seed * 1.3) * op.cWave * 0.65;
+  }
+  if (op.cNoise > 0) {
+    gx += (worldFbmN((x || 0) * 0.35, (y || 0) * 0.35, op.seed + 31, op.cDetail) - 0.5) * op.cNoise * 2.2;
+    gy += (worldFbmN((x || 0) * 0.35 + 9.4, (y || 0) * 0.35, op.seed + 47, op.cDetail) - 0.5) * op.cNoise * 2.2;
+  }
+  if (op.cBevelDir) {
+    const cs = Math.cos(op.cBevelDir), sn = Math.sin(op.cBevelDir);
+    const rx = gx * cs - gy * sn, ry = gx * sn + gy * cs;
+    gx = rx; gy = ry;
+  }
+  const k = (2.2 + op.bevel * 9) * (0.35 + op.cBevelDepth * 1.3);
   let nx = -gx * k, ny = gy * k, nz = 1;
   const l = Math.hypot(nx, ny, nz) || 1;
   nx /= l; ny /= l; nz /= l;
   let t = worldClamp(0.5 + ny * 0.55 - nx * 0.18 + (h - 0.5) * 0.3, 0, 1);
-  if (op.cDistort > 0) t = worldClamp(t + (worldFbm((x || 0) * 0.045 + 3.1, (y || 0) * 0.045, op.seed) - 0.5) * op.cDistort * 0.7, 0, 1);
+  if (op.cDistort > 0) t = worldClamp(t + (worldFbmN((x || 0) * 0.045 + 3.1, (y || 0) * 0.045, op.seed, op.cDetail) - 0.5) * op.cDistort * 0.7, 0, 1);
   t = worldClamp(0.5 + (t - 0.5) * (op.cContrast * 2), 0, 1);
   let base = worldEnvCor(op.env, t);
-  if (op.cMetal > 0 && srcData) {
-    const sr = srcData[srcI] / 255, sg = srcData[srcI + 1] / 255, sb = srcData[srcI + 2] / 255;
+  if (op.cReflBlur > 0) {
+    const dd = 0.05 + op.cReflBlur * 0.13;
+    const bA = worldEnvCor(op.env, worldClamp(t - dd, 0, 1)), bB = worldEnvCor(op.env, worldClamp(t + dd, 0, 1));
+    const m = op.cReflBlur * 0.85;
+    base = [base[0] * (1 - m) + (bA[0] + bB[0]) * 0.5 * m, base[1] * (1 - m) + (bA[1] + bB[1]) * 0.5 * m, base[2] * (1 - m) + (bA[2] + bB[2]) * 0.5 * m];
+  }
+  let sr = 0.5, sg = 0.5, sb = 0.5;
+  if (srcData) { sr = srcData[srcI] / 255; sg = srcData[srcI + 1] / 255; sb = srcData[srcI + 2] / 255; }
+  if (op.cMetal > 0) {
     base = [
       base[0] * (1 - op.cMetal) + base[0] * (0.25 + 0.75 * sr) * op.cMetal,
       base[1] * (1 - op.cMetal) + base[1] * (0.25 + 0.75 * sg) * op.cMetal,
@@ -11792,15 +11848,22 @@ function worldChromeCor(h, gx, gy, op, x, y, srcData, srcI) {
     ];
   }
   const specPow = (1 + op.cHighlight * 10) * (1 - op.cRough * 0.55);
-  const spec = Math.pow(Math.max(0, -nx * 0.35 - ny * 0.75 + nz * 0.55), Math.max(0.6, specPow)) * op.shine * (1 - op.cRough * 0.45);
+  const spec = Math.pow(Math.max(0, -nx * 0.35 - ny * 0.75 + nz * 0.55), Math.max(0.6, specPow)) * op.shine * (1 - op.cRough * 0.45) * (0.25 + op.cHi * 1.5);
   const sombra = 0.5 + 0.62 * worldClamp(h * 1.5, 0, 1);
   const expo = Math.pow(2, op.cExpo * 1.5), tn = op.cTint;
-  return [
-    Math.min(255, (base[0] * sombra * op.cRefl + spec * 255) * expo * tn[0]),
-    Math.min(255, (base[1] * sombra * op.cRefl + spec * 255) * expo * tn[1]),
-    Math.min(255, (base[2] * sombra * op.cRefl + spec * 255) * expo * tn[2]),
-    worldClamp((h - 0.02) * 3.2, 0, 1),
-  ];
+  let r = (base[0] * sombra * op.cRefl + spec * 255) * expo * tn[0];
+  let g = (base[1] * sombra * op.cRefl + spec * 255) * expo * tn[1];
+  let b = (base[2] * sombra * op.cRefl + spec * 255) * expo * tn[2];
+  if (op.cMetalI < 1) {
+    const m = op.cMetalI;
+    r = r * m + sr * 235 * (1 - m); g = g * m + sg * 235 * (1 - m); b = b * m + sb * 235 * (1 - m);
+  }
+  const lumBase = Math.max(op.cBase[0], op.cBase[1], op.cBase[2]);
+  if (lumBase > 0) {
+    const st = (1 - t) * 0.55 * lumBase;
+    r = r * (1 - st) + op.cBase[0] * 255 * st; g = g * (1 - st) + op.cBase[1] * 255 * st; b = b * (1 - st) + op.cBase[2] * 255 * st;
+  }
+  return [Math.min(255, r), Math.min(255, g), Math.min(255, b), worldClamp((h - 0.02) * 3.2, 0, 1)];
 }
 /* Ruído de valor determinístico (fbm de 3 oitavas) para chama e gotas. */
 function worldHash(ix, iy, seed) {
@@ -11903,6 +11966,11 @@ function worldAplicaVis(raiz, params) {
   if (!raiz || !raiz.querySelectorAll) return;
   const vis = worldKeysVisiveis(params);
   raiz.querySelectorAll('[data-pkey]').forEach(el => { el.style.display = vis.has(el.dataset.pkey) ? '' : 'none'; });
+  /* grupos (Bevel/Reflection/…) sem nenhum controle visível somem juntos */
+  raiz.querySelectorAll('.ctl-sec').forEach(sec => {
+    const algum = [...sec.querySelectorAll('[data-pkey]')].some(el => el.style.display !== 'none');
+    sec.style.display = algum ? '' : 'none';
+  });
 }
 /* Análise da forma (grade ≤640px), em cache no nó: mexer em cor,
    intensidade ou mix não recalcula a máscara. */
@@ -11955,7 +12023,27 @@ function worldExtrude(srcCv, W, H, op) {
 }
 function worldChrome(ana, W, H, op) {
   const { aW, aH } = ana;
-  const altura = worldSuaviza(ana.shape, aW, aH, Math.round(op.bevel * 7 + op.roundness * 5 + op.cRough * 6));
+  /* Bevel: campo de altura chanfrado a partir da forma. Desligado = topo
+     plano com borda dura; Segments quantiza o chanfro em degraus (menos
+     = mais facetado); Profile curva o perfil (côncavo↔convexo);
+     Smoothness suaviza as transições depois do perfil. */
+  let altura;
+  if (!op.bevelOn) {
+    altura = Float32Array.from(ana.shape);
+  } else {
+    altura = worldSuaviza(ana.shape, aW, aH, Math.round(op.bevel * 7 + op.roundness * 5 + op.cRough * 6));
+    const perfilExp = 0.4 + op.cBevelProfile * 1.2;
+    if (op.cBevelSeg < 16 || Math.abs(perfilExp - 1) > 0.01) {
+      const niveis = Math.max(1, op.cBevelSeg - 1);
+      for (let j = 0; j < altura.length; j++) {
+        let v = altura[j];
+        if (op.cBevelSeg < 16) v = Math.round(v * niveis) / niveis;
+        if (Math.abs(perfilExp - 1) > 0.01) v = Math.pow(Math.max(0, v), perfilExp);
+        altura[j] = v;
+      }
+    }
+    if (op.cBevelSmooth > 0) altura = worldSuaviza(altura, aW, aH, Math.round(op.cBevelSmooth * 4));
+  }
   const fCv = fx7NewCanvas(aW, aH), fg = fCv.getContext('2d');
   const img = fg.createImageData(aW, aH), d = img.data;
   for (let y = 0; y < aH; y++) for (let x = 0; x < aW; x++) {
